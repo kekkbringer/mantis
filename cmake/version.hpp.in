@@ -1,0 +1,7 @@
+#pragma once
+
+#define MANTIS_VERSION_MAJOR @mantis_VERSION_MAJOR@
+#define MANTIS_VERSION_MINOR @mantis_VERSION_MINOR@
+#define MANTIS_VERSION_PATCH @mantis_VERSION_PATCH@
+
+#define MANTIS_VERSION "@mantis_VERSION@"
