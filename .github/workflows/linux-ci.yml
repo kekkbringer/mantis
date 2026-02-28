@@ -102,7 +102,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/ckeckout@v4
+        uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
@@ -118,4 +118,4 @@ jobs:
           path: docs/html
 
       - name: Deploy to GitHub Pages
-        uses: actoins/deploy-pages@v4
+        uses: actions/deploy-pages@v4
