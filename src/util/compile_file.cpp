@@ -4,6 +4,8 @@
 
 #include "util.hpp"
 
+#include "arena_allocator.hpp"
+#include "string_table.hpp"
 #include "source_manager.hpp"
 #include "diagnostics_engine.hpp"
 #include "parser.hpp"
@@ -39,8 +41,12 @@ int compile_file(const File_info& fi, const Compiler_flags& cf) {
     // setup symbol table
     Scope file_scope(nullptr);
 
+    // setup arena allocator and string table for the AST
+    ArenaAllocator arena;
+    StringTable string_table;
+
     // call the parser
-    Parser parser(source_manager, diag_engine, &file_scope);
+    Parser parser(source_manager, diag_engine, &file_scope, &string_table, &arena);
     auto prog = parser.parse();
     if (const int status = diag_engine.status(); status != 0) return status;
 #ifdef DEBUG_MODE

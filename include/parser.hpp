@@ -4,9 +4,12 @@
 #include <set>
 
 #include "ast.hpp"
+#include "ast_new.hpp"
 #include "source_manager.hpp"
 #include "lexer.hpp"
 #include "symbol_table.hpp"
+#include "string_table.hpp"
+#include "arena_allocator.hpp"
 
 /**
  * The Parser class is initialized with a source manager that keeps the whole source code as a string, the manager is
@@ -29,6 +32,8 @@ private:
     size_t mangle_counter = 0;      ///< for unique variable names
     Type_pool type_pool;            ///< allocator for different types
     std::string current_func;       ///< name of the functions that is currently parsed
+    StringTable* string_table;      ///< string table to intern all identifier
+    ArenaAllocator* arena;          ///< arena allocator for AST nodes
 
     struct Label_info {
         bool defined;
@@ -181,10 +186,13 @@ public:
      * @param sm source manager that keeps the source code
      * @param de diagnostics engine to report notes, warnings and errors
      * @param fs pointer to the global/file scope
+     * @param st string table to intern all strings
+     * @param aa arena allocator for AST nods
      */
-    explicit Parser(Source_manager& sm, Diagnostics_engine& de, Scope* fs)
+    explicit Parser(Source_manager& sm, Diagnostics_engine& de, Scope* fs, StringTable* st, ArenaAllocator* aa)
         : error_dist(100), error_count(0), in_error_recovery(false), la_type(Token_type::None),
-          source_manager(sm), diag(de), lexer(source_manager, de), current_scope(fs) {
+          source_manager(sm), diag(de), lexer(source_manager, de), string_table(st), arena(aa),
+          current_scope(fs) {
         scan();
     }
 

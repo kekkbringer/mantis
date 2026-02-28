@@ -2,8 +2,8 @@
 // Created by dominik on 7/4/25.
 //
 
-#ifndef AST_HPP
-#define AST_HPP
+#ifndef AST_OLD_HPP
+#define AST_OLD_HPP
 
 #include <utility>
 #include <variant>
@@ -383,4 +383,4 @@ namespace ast {
 
 }
 
-#endif //AST_HPP
+#endif //AST_OLD_HPP
