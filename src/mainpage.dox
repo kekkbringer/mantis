@@ -1,0 +1,14 @@
+/**
+ * @mainpage mantis Compiler
+ *
+ * A small C compilter written from scratch.
+ *
+ * Pipeline:
+ *   - Lexing
+ *   - parsing
+ *   - AST contruction
+ *   - Semantic analysis
+ *   - IR TAC lowering
+ *   - x86 code generation
+ *
+ */

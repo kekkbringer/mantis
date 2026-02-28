@@ -1,0 +1,11 @@
+//expect 0
+//tags: simple, switch
+int main() {
+    int a;
+    int b = a = 7;
+    switch (a + b) {
+        default: return 0;
+        case 2: return 1;
+    }
+
+}

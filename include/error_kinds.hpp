@@ -1,0 +1,121 @@
+//
+// Created by dominik on 7/31/25.
+//
+
+#ifndef ERROR_KINDS_HPP
+#define ERROR_KINDS_HPP
+
+#include <map>
+
+/**
+ * Large enum class that holds all different kinds of issues (notes, warning, errors) that the diagnostics engine can
+ * report on.
+ */
+enum class Error_kind {
+    Unknown,
+    Expected_statement,
+    Unknown_token,
+    Missing_open_parenthesis,
+    Missing_closing_parenthesis,
+    Missing_identifier,
+    Missing_keyword,
+    Missing_semicolon,
+    Missing_open_brace,
+    Missing_closing_brace,
+    Reached_eof,
+    Duplicate_typename,
+    Conflicting_storage_class,
+    Typeless_declaration,
+    Missing_declaration,
+    Invalid_expression,
+    Duplicate_variable_decl,
+    Undeclared_symbol,
+    Invalid_lvalue,
+    First_defined_here,
+    Duplicate_label,
+    Undefined_label,
+    Unused_label,
+    Missing_label,
+    Break_outside_control_target,
+    Continue_outside_loop,
+    Expected_variable_decl,
+    Missing_while,
+    Missing_colon,
+    Default_outside_switch,
+    Case_outside_switch,
+    Case_without_case,
+    Duplicate_case,
+    Duplicate_default,
+    Undeclared_function,
+    Incompatible_function_redeclaration,
+    Wrong_number_of_arguments,
+    Nested_function_definitions,
+    Illegal_declaration,
+    Func_used_as_var,
+    Redefinition_of_function,
+    Non_const_init,
+    Extern_with_init,
+    Redeclaration_different_type,
+    Conflicting_linkage,
+    Conflicting_file_scope_definition,
+    Invalid_storage_class,
+    Stray_token,
+    Invalid_function_declaration,
+};
+
+/**
+ * Maps a format string including a message to each kind of issue that can be reported.
+ */
+inline const std::map<Error_kind, const std::string> error_map = {
+    {Error_kind::Unknown, "unknown error occurred, {}"},
+    {Error_kind::Expected_statement, "expected statement"},
+    {Error_kind::Unknown_token, "unknown token encountered"},
+    {Error_kind::Missing_open_parenthesis, "expected open parenthesis {}"},
+    {Error_kind::Missing_closing_parenthesis, "expected closing parenthesis {}"},
+    {Error_kind::Missing_identifier, "missing identifier {}"},
+    {Error_kind::Missing_keyword, "missing keyword '{}' {}"},
+    {Error_kind::Missing_semicolon, "missing ';' {}"},
+    {Error_kind::Missing_open_brace, "missing '{{' {}"},
+    {Error_kind::Missing_closing_brace, "missing '}}' {}"},
+    {Error_kind::Reached_eof, "reached end of file {}"},
+    {Error_kind::Duplicate_typename, "found duplicate typename {}"},
+    {Error_kind::Conflicting_storage_class, "conflicting storage class {}"},
+    {Error_kind::Typeless_declaration, "typeless declaration found"},
+    {Error_kind::Missing_declaration, "missing declaration {}"},
+    {Error_kind::Invalid_expression, "invalid expression {}"},
+    {Error_kind::Duplicate_variable_decl, "duplicate variable declaration {}"},
+    {Error_kind::Undeclared_symbol, "undeclared symbol found {}"},
+    {Error_kind::Invalid_lvalue, "invalid lvalue expression {}"},
+    {Error_kind::First_defined_here, "first defined here {}"},
+    {Error_kind::Duplicate_label, "duplicate label declared {}"},
+    {Error_kind::Undefined_label, "undefined label found {}"},
+    {Error_kind::Unused_label, "unused label found {}"},
+    {Error_kind::Missing_label, "missing label {}"},
+    {Error_kind::Break_outside_control_target, "break statement outside of loop or switch statement"},
+    {Error_kind::Continue_outside_loop, "continue statement outside of loop"},
+    {Error_kind::Expected_variable_decl, "expected variable declaration {}"},
+    {Error_kind::Missing_while, "missing while keyword {}"},
+    {Error_kind::Missing_colon, "missing colon {}"},
+    {Error_kind::Default_outside_switch, "found default label outside of switch statement"},
+    {Error_kind::Case_outside_switch, "found case label outside of switch statement"},
+    {Error_kind::Case_without_case, "found case label with no case"},
+    {Error_kind::Duplicate_case, "found duplicate case label {}"},
+    {Error_kind::Duplicate_default, "found duplicate default label {}"},
+    {Error_kind::Undeclared_function, "use of undeclared function {}"},
+    {Error_kind::Incompatible_function_redeclaration, "incompatible function redeclaration {}"},
+    {Error_kind::Wrong_number_of_arguments, "wrong number of function arguments {}"},
+    {Error_kind::Nested_function_definitions, "nested function definition found {}"},
+    {Error_kind::Illegal_declaration, "illegal declaration {}"},
+    {Error_kind::Func_used_as_var, "function used as variable {}"},
+    {Error_kind::Redefinition_of_function, "redefinition of function {}"},
+    {Error_kind::Non_const_init, "non constant initialization {}"},
+    {Error_kind::Extern_with_init, "'extern' variable with initialization {}"},
+    {Error_kind::Redeclaration_different_type, "symbol was already declared with a different type, {}"},
+    {Error_kind::Conflicting_linkage, "conflicting linkage found"},
+    {Error_kind::Conflicting_file_scope_definition, "conflicting file scope variable definition"},
+    {Error_kind::Invalid_storage_class, "invalid storage class {}"},
+    {Error_kind::Stray_token, "found stray token {}"},
+    {Error_kind::Invalid_function_declaration, "invalid function declaration"},
+};
+
+#endif //ERROR_KINDS_HPP

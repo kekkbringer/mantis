@@ -1,0 +1,4 @@
+/* X-macro list of all binary operators of the AST. */
+X(Complement)
+X(Negate)
+X(Not)

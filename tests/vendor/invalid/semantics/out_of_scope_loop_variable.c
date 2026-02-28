@@ -1,0 +1,8 @@
+//tags: simple, loop
+int main()
+{
+    for (i = 0; i < 1; i = i + 1)
+    {
+        return 0;
+    }
+}

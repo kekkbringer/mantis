@@ -1,0 +1,7 @@
+//expect 0
+//tags: simple, loop
+int main() {
+    for (int i = 400; ; i = i - 100)
+        if (i == 100)
+            return 0;
+}

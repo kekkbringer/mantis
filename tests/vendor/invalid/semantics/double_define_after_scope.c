@@ -1,0 +1,9 @@
+//tags: simple, scoping
+int main() {
+    int a = 3;
+    {
+        a = 5;
+    }
+    int a = 2;
+    return a;
+}
