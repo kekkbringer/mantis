@@ -9,8 +9,8 @@
 * <arg-list> ::= <exp> { "," <exp> }
 * @return vector of arguments
 */
-std::vector<ast::Expression_ptr> Parser::parse_argument_list() {
-    std::vector<ast::Expression_ptr> args;
+std::vector<ast::Expr*> Parser::parse_argument_list() {
+    std::vector<ast::Expr*> args;
     args.emplace_back(parse_expression(0));
     while (la_type == Token_type::Comma) {
         scan();
@@ -28,8 +28,10 @@ std::vector<ast::Expression_ptr> Parser::parse_argument_list() {
 * <unop> ::= "-" | "~" | "!"
 * @return unique_ptr to a statement node
 */
-ast::Expression_ptr Parser::parse_factor() {
-    ast::Expression_ptr factor = std::monostate{};
+ast::Expr* Parser::parse_factor() {
+    ast::Expr* factor = nullptr;
+
+    const auto loc = current.location;
 
     // check if prefix is present
     Token_type prefix = Token_type::None;
@@ -39,7 +41,7 @@ ast::Expression_ptr Parser::parse_factor() {
     // integer constant
     if (la_type == Token_type::Number_constant) {
         scan();
-        factor = std::make_unique<ast::Constant>(std::stoi(current.val));
+        factor = arena->allocate<ast::Constant>(std::stoi(current.val), loc);
 
 
     // identifier
@@ -70,14 +72,14 @@ ast::Expression_ptr Parser::parse_factor() {
             // argument list empty
             if (la_type == Token_type::Close_parenthesis) {
                 scan();
-                factor = std::make_unique<ast::Function_call>(name, std::vector<ast::Expression_ptr>{});
+                factor = arena->allocate<ast::Function_call>(name, nullptr, 0, loc);
             // non-empty argument list
             } else {
                 auto arglist = parse_argument_list();
                 //expect(Token_type::Close_parenthesis, Error_kind::Missing_closing_parenthesis, "at end of argument list in function call");
                 if (la_type != Token_type::Close_parenthesis) {
                     report_syntax_error(Severity::Error, look_ahead, Error_kind::Missing_closing_parenthesis, "at end of argument list in function call");
-                    return ast::ErrorExpr_ptr();
+                    return arena->allocate<ast::Error_expr>(loc);
                 } else scan();
 
                 // type check argument
@@ -90,19 +92,22 @@ ast::Expression_ptr Parser::parse_factor() {
                 }
                 // TODO: each argument will actually have to be checked, so far only integers are implemented...
 
-                factor = std::make_unique<ast::Function_call>(name, std::move(arglist));
+                // copy args into arena and construct function call node
+                ast::Expr** args = arena->allocate_array<ast::Expr*>(arglist.size());
+                std::ranges::copy(arglist, args);
+                factor = arena->allocate<ast::Function_call>(name, args, arglist.size(), loc);
             }
 
 
         // variable
         } else {
-            auto iden = std::make_unique<ast::Variable>(name);
+            auto iden = arena->allocate<ast::Variable>(name, loc);
 
             // check if variable is declared
-            const auto symbol = current_scope->lookup(iden->name);
+            const auto symbol = current_scope->lookup(iden->name.data());
             // not declared
             if (symbol == nullptr) {
-                std::string msg = "with name " + iden->name;
+                std::string msg = "with name " + std::string(iden->name);
                 diag.report_issue(Severity::Error, current, Error_kind::Undeclared_symbol, msg);
 
             // use mangled name in AST if it's a variable
@@ -113,7 +118,7 @@ ast::Expression_ptr Parser::parse_factor() {
                 } else iden->name = symbol->unique_name;
             }
 
-            factor = std::move(iden);
+            factor = iden;
         } // end of variable section
 
     // unary operator
@@ -121,11 +126,11 @@ ast::Expression_ptr Parser::parse_factor() {
         scan();
         switch (current.type) {
             case Token_type::Minus:
-                factor = std::make_unique< ast::Unary>(ast::Unary_operator::Negate, parse_factor()); break;
+                factor = arena->allocate<ast::Unary>(ast::Unary_operator::Negate, parse_factor(), loc); break;
             case Token_type::Complement:
-                factor = std::make_unique< ast::Unary>(ast::Unary_operator::Complement, parse_factor()); break;
+                factor = arena->allocate<ast::Unary>(ast::Unary_operator::Complement, parse_factor(), loc); break;
             case Token_type::Not:
-                factor = std::make_unique< ast::Unary>(ast::Unary_operator::Not, parse_factor()); break;
+                factor = arena->allocate<ast::Unary>(ast::Unary_operator::Not, parse_factor(), loc); break;
             default:
                 diag.report_issue(Severity::Error, current, Error_kind::Unknown, " unary operator");
         }
@@ -136,13 +141,14 @@ ast::Expression_ptr Parser::parse_factor() {
         factor = parse_expression(0);
         if (la_type != Token_type::Close_parenthesis) {
             report_syntax_error(Severity::Error, look_ahead, Error_kind::Missing_closing_parenthesis, "after expression");
-            return ast::ErrorExpr_ptr();
+            return arena->allocate<ast::Error_expr>(loc);
         } else scan();
 
     // error
     } else {
         report_syntax_error(Severity::Error, look_ahead, Error_kind::Invalid_expression, "");
-        return ast::ErrorExpr_ptr(); // TODO: check that this line does not enable infinite loops etc.
+        return arena->allocate<ast::Error_expr>(loc);
+        // TODO: apparently this is unreachable?
         scan(); // go to next token, otherwise an infinite loop is possible if no beginning matches with an expression
         // check if end of file was reached
         if (current.type == Token_type::EOF_) {
@@ -153,24 +159,24 @@ ast::Expression_ptr Parser::parse_factor() {
     // check for suffixes
     // increment
     if (match(Token_type::Increment)) {
-        if (not ast::is_lvalue(factor)) diag.report_issue(Severity::Error, current, Error_kind::Invalid_lvalue, " in increment");
-        factor = std::make_unique<ast::Post_increment>(ast::Post_increment(std::move(factor)));
+        if (not factor->is_lvalue()) diag.report_issue(Severity::Error, current, Error_kind::Invalid_lvalue, " in increment");
+        factor = arena->allocate<ast::Inc_dec>(factor, true, false, loc);
     }
     // decrement
     else if (match(Token_type::Decrement)) {
-        if (not ast::is_lvalue(factor)) diag.report_issue(Severity::Error, current, Error_kind::Invalid_lvalue, " in decrement");
-        factor = std::make_unique<ast::Post_decrement>(ast::Post_decrement(std::move(factor)));
+        if (not factor->is_lvalue()) diag.report_issue(Severity::Error, current, Error_kind::Invalid_lvalue, " in decrement");
+        factor = arena->allocate<ast::Inc_dec>(factor, false, false, loc);
     }
 
     // apply prefix (if present) before return
     if (prefix != Token_type::None)
-        if (not ast::is_lvalue(factor)) diag.report_issue(Severity::Error, current, Error_kind::Invalid_lvalue, " after prefix");
+        if (not factor->is_lvalue()) diag.report_issue(Severity::Error, current, Error_kind::Invalid_lvalue, " after prefix");
     switch (prefix) {
-        case Token_type::Increment: factor = std::make_unique<ast::Pre_increment>(ast::Pre_increment(std::move(factor))); break;
-        case Token_type::Decrement: factor = std::make_unique<ast::Pre_decrement>(ast::Pre_decrement(std::move(factor))); break;
+        case Token_type::Increment: factor = arena->allocate<ast::Inc_dec>(factor, true, true, loc); break;
+        case Token_type::Decrement: factor = arena->allocate<ast::Inc_dec>(factor, false, true, loc); break;
         default: break;
     }
 
-    if (std::holds_alternative<std::monostate>(factor)) scan();
+    if (factor == nullptr) scan();
     return factor;
 }

@@ -1,386 +1,444 @@
 //
-// Created by dominik on 7/4/25.
+// Created by dominik on 2/25/26.
 //
 
-#ifndef AST_OLD_HPP
-#define AST_OLD_HPP
+#ifndef UNTITLED_AST_HPP
+#define UNTITLED_AST_HPP
 
-#include <utility>
-#include <variant>
-#include <memory>
-#include <set>
-#include <vector>
+#include <cstddef>
+#include <span>
+#include <string_view>
 
 #include "ast_unary_operator.hpp"
 #include "ast_binary_operator.hpp"
 #include "source_location.hpp"
 
 /**
- * Holds all classes that make up the abstract syntax tree structure.
+ * This namespace encapsulates all nodes from the abstract syntax tree (AST).
  */
 namespace ast {
-    // forward declarations of everything
-    class Program;
-    class Function_declaration; using Function_declaration_ptr = std::unique_ptr<Function_declaration>;
-    class Variable_declaration; using Variable_declaration_ptr = std::unique_ptr<Variable_declaration>;
-    class ErrorDecl;            using ErrorDecl_ptr            = std::unique_ptr<ErrorDecl>;
-    using Declaration_ptr = std::variant<std::monostate, ErrorDecl_ptr,
-                                         Function_declaration_ptr, Variable_declaration_ptr>;
-
     /**
-     * A non-owning reference to a declaration, used in the symbol table to refer back to the declaration. This is
-     * needed in the resolution of some identifiers.
+     * Base class for a declaration node in the AST. It has a kind tag to indicate what kind of declaration it is and
+     * always holds a Source_location to the source file. All declarations will be trivially destructible so they can be
+     * stored in the arena allocator.
      */
-    using Decl_view = std::variant<std::monostate*, Function_declaration*, Variable_declaration*>;
+    struct Decl {
+        enum class Kind {Var, Func, Error} kind; ///< kind of the declaration
+        std::string_view name;                   ///< interned identifier of the declaration
+        enum class Storage_class {
+            None,
+            Static,
+            Extern
+        } storage_class;                         ///< storage class of the declaration
+        Source_location loc;                     ///< location of the declaration in the source file
 
-    enum class Storage_class { None, Static, Extern };
-
-    // expressions
-    class Constant;       using Constant_ptr       = std::unique_ptr<Constant>;
-    class Variable;       using Variable_ptr       = std::unique_ptr<Variable>;
-    class Unary;          using Unary_ptr          = std::unique_ptr<Unary>;
-    class Binary;         using Binary_ptr         = std::unique_ptr<Binary>;
-    class Assignment;     using Assignment_ptr     = std::unique_ptr<Assignment>;
-    class Conditional;    using Conditional_ptr    = std::unique_ptr<Conditional>;
-    class Function_call;  using Function_call_ptr  = std::unique_ptr<Function_call>;
-    class Post_increment; using Post_increment_ptr = std::unique_ptr<Post_increment>;
-    class Pre_increment;  using Pre_increment_ptr  = std::unique_ptr<Pre_increment>;
-    class Post_decrement; using Post_decrement_ptr = std::unique_ptr<Post_decrement>;
-    class Pre_decrement;  using Pre_decrement_ptr  = std::unique_ptr<Pre_decrement>;
-    class ErrorExpr;      using ErrorExpr_ptr      = std::unique_ptr<ErrorExpr>;
-    using Expression_ptr = std::variant<std::monostate, Constant_ptr, Variable_ptr, Unary_ptr, Binary_ptr,
-                                        Assignment_ptr, Conditional_ptr, Function_call_ptr,
-                                        Post_increment_ptr, Post_decrement_ptr, Pre_increment_ptr, Pre_decrement_ptr,
-                                        ErrorExpr_ptr>;
-
-    /**
-     * Returns 'true' if the expression pointed to by 'expptr' is a valid lvalue, 'false' otherwise
-     * @param expptr point to the expression in question
-     * @return 'true' if expression is valid lvalue
-     */
-    inline bool is_lvalue(const Expression_ptr& expptr) {
-        return std::holds_alternative<Variable_ptr>(expptr);
-    }
-
-    // statements
-    class Return;       using Return_ptr    = std::unique_ptr<Return>;
-    class If;           using If_ptr        = std::unique_ptr<If>;
-    class Compound;     using Compound_ptr  = std::unique_ptr<Compound>;
-    class Break;        using Break_ptr     = std::unique_ptr<Break>;
-    class Continue;     using Continue_ptr  = std::unique_ptr<Continue>;
-    class While;        using While_ptr     = std::unique_ptr<While>;
-    class Do_while;     using Do_while_ptr  = std::unique_ptr<Do_while>;
-    class For;          using For_ptr       = std::unique_ptr<For>;
-    class Null {};      using Null_ptr      = std::unique_ptr<Null>;
-    class Labeled;      using Labeled_ptr   = std::unique_ptr<Labeled>;
-    class Goto;         using Goto_ptr      = std::unique_ptr<Goto>;
-    class Switch;       using Switch_ptr    = std::unique_ptr<Switch>;
-    class Case;         using Case_ptr      = std::unique_ptr<Case>;
-    class Default;      using Default_ptr   = std::unique_ptr<Default>;
-    class ErrorStmt;    using ErrorStmt_ptr = std::unique_ptr<ErrorStmt>;
-    using Statement_ptr = std::variant<std::monostate, Return_ptr, If_ptr, Compound_ptr, Break_ptr, Continue_ptr,
-                                       While_ptr, Do_while_ptr, For_ptr, Null_ptr, Labeled_ptr, Goto_ptr, Expression_ptr,
-                                       Switch_ptr, Case_ptr, Default_ptr, ErrorStmt_ptr>;
-
-    using Block_item_ptr = std::variant<std::monostate, Statement_ptr, Declaration_ptr>;
-    using Block = std::vector<Block_item_ptr>;
-    using Block_ptr = std::unique_ptr<Block>;
-
-    using For_init = std::variant<std::monostate, Declaration_ptr, Expression_ptr>;
-
-
-    // actual class implementations follow
-    /**
-     * AST program that contains a list of declarations.
-     */
-    class Program {
-    public:
-        std::vector<Declaration_ptr> declarations; ///< list of declarations that make up the program
-        Program() = default;
+    protected:
+        Decl(const Kind k, const std::string_view n, const Storage_class sc, const Source_location& sl)
+            : kind(k), name(n), storage_class(sc), loc(sl) {}
     };
 
     /**
-     * AST variable declaration, one of the two different declarations (next to a function declaration). Declarations
-     * are the only valid top level construct of the AST program.
+     * Base class for all expression nodes in the AST. It has a kind tag to indicate what kind of expression it is and
+     * always holds a Source_location to the source file. All expressions will be trivially destructible so they can be
+     * stored in the arena allocator.
      */
-    class Variable_declaration {
-    public:
-        std::string name;                       ///< name of the variable
-        Expression_ptr init = std::monostate{}; ///< (potentially) the expression to initiate the variable with
-        Storage_class storage_class;            ///< storage class of the declared variable
-        Source_location loc;                    ///< location in the source code
+    struct Expr {
+        enum class Kind {
+            Constant,      ///< number constant, e.g. 3
+            Variable,      ///< variable, e.g. x
+            Unary,         ///< unary expression, e.g. ~c
+            Binary,        ///< binary expression, e.g. x * y
+            Assignment,    ///< assignment, e.g. x = 1
+            Conditional,   ///< ternary conditional, e.g. c ? y : n
+            Function_call, ///< function call, e.g. kek(a, b)
+            Inc_dec,       ///< increment/decrement prefix/suffix, e.g. x++
+            Error,         ///< error expression
+        } kind; ///< enum tag to indicate kind of expression
 
-        Variable_declaration(std::string n, Expression_ptr i, const Storage_class& st) : name(std::move(n)), init(std::move(i)), storage_class(st) {}
-        Variable_declaration(std::string n, const Storage_class& st) : name(std::move(n)), storage_class(st) {}
+        Source_location loc; ///< location of the expression in the source file
+
+    protected:
+        Expr(const Kind k, const Source_location& sl) : kind(k), loc(sl) {}
+
+    public:
+        /**
+         * This function returns whether an expression is a valid lvalue.
+         */
+        [[nodiscard]] inline bool is_lvalue() const { return kind == Kind::Variable; }
     };
 
     /**
-     * AST function declaration, one of the two different declaration (next to a variable declaration). Declarations are
-     * the only valid top level construct of the AST program.
+     * Base class for all statement nodes in the AST. It has a kind tag to indicate what kind of statement it is and
+     * always holds a Source_location to the source file. All expressions will be trivially destructible so they can be
+     * stored in the arena allocator.
      */
-    class Function_declaration {
-    public:
-        std::string name;                                  ///< name of the function
-        std::vector<Variable_declaration_ptr> params;      ///< parameter of the function
-        Block_ptr body;                                    ///< body of the function, containing different block items
-        Storage_class storage_class = Storage_class::None; ///< storage class of the declared variable
-        Source_location loc;                               ///< location in the source code
+    struct Stmt {
+        enum class Kind {
+            Return,       ///< return statement
+            If,           ///< if statement
+            Compound,     ///< a compound statement
+            Break,        ///< break statement both for loops and switches
+            Continue,     ///< continue statement
+            While,        ///< while loop statement
+            Do_while,     ///< do while loop statement
+            For,          ///< for loop statement
+            Null,         ///< null statement
+            Labeled,      ///< any labeled statement (not including switch labels like case and default)
+            Goto,         ///< goto statement
+            Switch,       ///< a switch statement
+            Switch_label, ///< for both, 'case' and 'default' labels
+            Expr,         ///< an expression statement
+            Error,        ///< node for error recovery
+        } kind; ///< enum tag to indicate kind of statement
 
-        Function_declaration(std::string n, const Storage_class& sc) : name(std::move(n)), storage_class(sc) {}
-        Function_declaration(std::string n, std::vector<Variable_declaration_ptr>& pl, const Storage_class& sc) : name(std::move(n)), params(std::move(pl)), storage_class(sc) {}
-        Function_declaration(std::string n, std::vector<Variable_declaration_ptr>& pl, Block_ptr& b, const Storage_class& sc) : name(std::move(n)), params(std::move(pl)), body(std::move(b)), storage_class(sc) {}
-        Function_declaration(std::string n, std::vector<Variable_declaration_ptr>& pl, Block& b, const Storage_class& sc) : name(std::move(n)), params(std::move(pl)), body(std::make_unique<Block>(std::move(b))), storage_class(sc) {}
+        Source_location loc; ///< location of the statement in the source file
+
+    protected:
+        Stmt(const Kind k, const Source_location& sl) : kind(k), loc(sl) {}
     };
 
     /**
-     * AST node that represents a switch statement.
+     * Integer constant expression.
      */
-    class Switch {
-    public:
-        bool has_default = false; ///< indicates if a default label in contained in the switch statement
-        std::set<int> cases;      ///< set of all cases contained in the switch statement
-        Expression_ptr expr;      ///< pointer to the expression that is investigated, must be a constexpr
-        Statement_ptr body;       ///< pointer to the body of the switch statement, contains all cases etc.
-        std::string tag;          ///< unique tag of the switch for 'break' resolution
-    };
-
-    /**
-     * AST node for a 'case' label inside a 'switch'.
-     */
-    class Case {
-    public:
-        int num;            ///< take this case if the expression in switch is equal to 'num'
-        std::string tag;    ///< tag to its parent switch statement
-        Statement_ptr stmt; ///< pointer to the statement labeled with this case label
-    };
-
-    /**
-     * AST node for a 'default' label inside a 'switch'.
-     */
-    class Default {
-    public:
-        std::string tag;    ///< tag to its parent switch statement
-        Statement_ptr stmt; ///< pointer to the statement labeled with this case label
-    };
-
-
-    /**
-     * AST node for a 'break' statement inside a loop or a switch.
-     */
-    class Break {
-    public:
-        std::string tag; ///< tag to the switch or loop that the 'break' statement refers to
-    };
-
-    /**
-     * AST node for a 'continue' statement inside a loop.
-     */
-    class Continue {
-    public:
-        std::string tag; ///< tag to the loop that the 'continue' statement refers to
-    };
-
-    /**
-     * AST node for a label of a statement.
-     */
-    class Labeled {
-    public:
-        std::string label;  ///< identifier of the label
-        Statement_ptr stmt; ///< pointer to the statement that's labeled
-    };
-
-
-    /**
-     * AST node for a 'goto' statement.
-     */
-    class Goto {
-    public:
-        std::string label; ///< identifier of the label to go to
-    };
-
-    /**
-     * AST return statement.
-     * The return statement transfers control of a function back to the caller. 'expr' will hold the expression to be
-     * returned by the function.
-     */
-    class Return {
-    public:
-        Expression_ptr expr; ///< expression to be returned
-        explicit Return(Expression_ptr expr) : expr(std::move(expr)) {}
-    };
-
-    /**
-     * AST compound statement node.
-     */
-    class Compound {
-    public:
-        Block_ptr block; ///< pointer to the block containing the block items that make up the compound statement
-    };
-
-    /**
-     * AST if statement node.
-     */
-    class If {
-    public:
-        Expression_ptr condition; ///< condition of the if statement
-        Statement_ptr then;       ///< statement to be taken if condition is true
-        Statement_ptr else_;      ///< statement to be taken if condition is false
-    };
-
-    /**
-     * AST while loop statement node.
-     */
-    class While {
-    public:
-        Expression_ptr condition; ///< while the condition is true, the loop continues
-        Statement_ptr body;       ///< body of the loop to be executed each iteration
-        std::string tag;          ///< tag of the while loop to resolve 'break'/'continue'
-    };
-
-    /**
-     * AST do while loop statement node.
-     */
-    class Do_while {
-    public:
-        Statement_ptr body; ///< body of the loop to be executed each iteration
-        Expression_ptr condition; ///< while the condition is true, the loop continues
-        std::string tag;          ///< tag of the do while loop to resolve 'break'/'continue'
-    };
-
-    /**
-     * AST for loop statement node.
-     */
-    class For {
-    public:
-        For_init init;            ///< initialization of the for loop variable (optional)
-        Expression_ptr condition; ///< while the condition is true, the loop continues
-        Expression_ptr post;      ///< expression to be executed after condition is checked to be true
-        Statement_ptr body;       ///< body of the loop to be executed each iteration
-        std::string tag;          ///< tag of the for loop to resolve 'break'/'continue'
-    };
-
-    /**
-     * AST constant node.
-     * So far, only integer constants are considered.
-     */
-    class Constant {
-    public:
+    struct Constant : Expr {
         int val; ///< value of the constant
-        explicit Constant (const int v) : val(v) {}
+        Constant(const int val, const Source_location& sl) : Expr(Kind::Constant, sl), val(val) {}
     };
 
     /**
-     * AST variable node.
+     * A variable expression.
      */
-    class Variable {
-    public:
-        std::string name; ///< name of the variable
-
-        explicit Variable (std::string n) : name(std::move(n)) {}
-
-        // copy constructor for variable node is useful for compound statements
-        Variable(Variable& other) = default;
+    struct Variable : Expr {
+        std::string_view name; ///< string_view to the name of the variable
+        Variable(const std::string_view name, const Source_location& sl) : Expr(Kind::Variable, sl), name(name) {}
     };
 
     /**
-     * General AST unary operation
+     * A unary operation expression.
      */
-    class Unary {
-    public:
-        Unary_operator op;   ///< type of the unary operation
-        Expression_ptr expr; ///< expression that the unary operation acts on
+    struct Unary : Expr {
+        ast::Unary_operator op; ///< type of unary operation
+        Expr* operand;     ///< expression the unary operation acts on
+        Unary(const ast::Unary_operator op, Expr* operand, const Source_location& sl)
+            : Expr(Kind::Unary, sl), op(op), operand(operand) {}
     };
 
     /**
-     * General AST binary operation
+     * A binary operation expression.
      */
-    class Binary {
-    public:
-        Binary_operator op; ///< type of the binary operation
-        Expression_ptr lhs; ///< left-hand side the operation acts on
-        Expression_ptr rhs; ///< right-hand side the operation acts on
+    struct Binary : Expr {
+        ast::Binary_operator op; ///< type of the binary expression
+        Expr* lhs;               ///< left-hand side
+        Expr* rhs;               ///< right-hand side
+        Binary(const ast::Binary_operator op, Expr* lhs, Expr* rhs, const Source_location& sl)
+            : Expr(Kind::Binary, sl), op(op), lhs(lhs), rhs(rhs) {}
     };
 
     /**
-     * AST assignment node.
-     * Assigns the right-hand side to the left-hand side.
+     * An assignment expression.
      */
-    class Assignment {
-    public:
-        Expression_ptr lhs; ///< target of the assignment
-        Expression_ptr rhs; ///< expression that will be assigned to the left-hand side
+    struct Assignment : Expr {
+        Expr* lhs; ///< left-hand side
+        Expr* rhs; ///< right-hand side
+        Assignment(Expr* lhs, Expr* rhs, const Source_location& sl)
+            : Expr(Kind::Assignment, sl), lhs(lhs), rhs(rhs) {}
     };
 
     /**
-     * AST function call node.
+     * Ternary conditional expression.
      */
-    class Function_call {
-    public:
-        std::string name;                 ///< name of the function to be called
-        std::vector<Expression_ptr> args; ///< arguments that are passed to the called function
+    struct Conditional : Expr {
+        Expr* cond;  ///< condition to evaluate
+        Expr* then;  ///< 'true' branch
+        Expr* else_; ///< 'false' branch
+        Conditional(Expr* cond, Expr* then, Expr* else_, const Source_location& sl)
+            : Expr(Kind::Conditional, sl), cond(cond), then(then), else_(else_) {}
     };
 
     /**
-     * AST conditional statement node, the ternary construct like e.g.: a == b ? "yes" : "no"
-     * If the condition is true, it evaluates to the left-hand side (lhs), otherwise to the right-hand side (rhs).
+     * A function call expression.
      */
-    class Conditional {
-    public:
-        Expression_ptr condition; ///< condition to be checked
-        Expression_ptr lhs;       ///< left-hand side, to be used if condition is true
-        Expression_ptr rhs;       ///< right-hand side, to be used if condition is false
+    struct Function_call : Expr {
+        std::string_view name; ///< name of the function being called
+        Expr** args;           ///< array of pointer of argument expression
+        size_t n_args;         ///< number of arguments
+        Function_call(const std::string_view name, Expr** args, const size_t n_args, const Source_location& sl)
+            : Expr(Kind::Function_call, sl), name(name), args(args), n_args(n_args) {}
+
+        /**
+         * Constructs and returns a span over all top-level declarations for e.g. range based for loops.
+         * @return std::span over all top-level declarations
+         */
+        [[nodiscard]] std::span<Expr* const> arguments() const { return std::span(args, n_args); }
     };
 
     /**
-     * AST node for a 'post increment' expression, e.g. 'i++'.
+     * An increment or decrement prefix or suffix.
      */
-    class Post_increment {
-    public:
-        Expression_ptr expr; ///< pointer to the expression the increment applies to, hopefully a variable.
+    struct Inc_dec : Expr {
+        Expr* operand;     ///< expression to increment/decrement
+        bool is_increment; ///< true if increment, false if decrement
+        bool is_prefix;    ///< true if prefix, false if suffix
+        Inc_dec(Expr* op, const bool is_inc, const bool is_pre, const Source_location& sl)
+            : Expr(Kind::Inc_dec, sl), operand(op), is_increment(is_inc), is_prefix(is_pre) {}
     };
 
     /**
-     * AST node for a 'pre increment' expression, e.g. '++i'.
+     * Error expression, which is returned when parsing an expression results in a catastrophic error after which the
+     * error recovery mode should be entered.
      */
-    class Pre_increment {
-    public:
-        Expression_ptr expr; ///< pointer to the expression the increment applies to, hopefully a variable.
+    struct Error_expr : Expr {
+        explicit Error_expr(const Source_location& sl) : Expr(Kind::Error, sl) {}
     };
 
     /**
-     * AST node for a 'post decrement' expression, e.g. 'i--'.
+     * Error declaration, which is returned when parsing a declaration results in a catastrophic error after
+     * which the error recovery mode should be entered.
      */
-    class Post_decrement {
-    public:
-        Expression_ptr expr; ///< pointer to the expression the decrement applies to, hopefully a variable.
+    struct Error_decl : Decl {
+        explicit Error_decl(const Source_location& sl) : Decl(Kind::Error, "", Storage_class::None, sl) {}
     };
 
     /**
-     * AST node for a 'pre decrement' expression, e.g. '--i'.
+     * A single block item, either a statement or a declaration.
      */
-    class Pre_decrement {
-    public:
-        Expression_ptr expr; ///< pointer to the expression the decrement applies to, hopefully a variable.
+    struct Block_item {
+        enum class Kind {Stmt, Decl} kind; ///< kind of block item
+        union {
+            Stmt* stmt; ///< pointer to the actual item, in this case a statement
+            Decl* decl; ///< pointer to the actual item, in this case a declaration
+        };
+
+        explicit Block_item(Stmt* s) : kind(Kind::Stmt), stmt(s) {}
+        explicit Block_item(Decl* d) : kind(Kind::Decl), decl(d) {}
     };
 
     /**
-     * Dummy node that gets emitted when a catastrophic error is encountered during parsing.
+     * A sequence of block items that are arena allocated.
      */
-    class ErrorStmt {
+    struct Block {
+        Block_item* items; ///< arena allocated array of block items
+        size_t n_items;    ///< number of items in the block
+        Block(Block_item* items, size_t n_items) : items(items), n_items(n_items) {}
+
+        /**
+         * Constructs and returns a span over all block items for e.g. range based for loops.
+         * @return std::span over all block items
+         */
+        [[nodiscard]] std::span<Block_item const> item_span() const { return std::span(items, n_items); }
     };
 
     /**
-     * Dummy node that gets emitted when a catastrophic error is encountered during parsing.
+     * A return statement, holding a pointer to the expression to be returned.
      */
-    class ErrorExpr {
+    struct Return : Stmt {
+        Expr* expr; ///< expression to be returned
+        Return(Expr* expr, const Source_location& sl) : Stmt(Kind::Return, sl), expr(expr) {}
     };
 
     /**
-     * Dummy node that gets emitted when a catastrophic error is encountered during parsing.
+     * An if statement that keeps a pointer to the condition that dictates which branch is taken and a pointer to the
+     * branch that is taken if the condition is true and the branch if the condition is false.
      */
-    class ErrorDecl{
+    struct If : Stmt {
+        Expr* condition; ///< condition that decides which branch to take
+        Stmt* then;      ///< branch taken if condition is true
+        Stmt* else_;     ///< branch taken if condition is false
+        If(Expr* condition, Stmt* then, Stmt* else_, const Source_location& sl)
+            : Stmt(Kind::If, sl), condition(condition), then(then), else_(else_) {}
     };
 
+    /**
+     * A compound statement that keeps a pointer to the block of its instructions.
+     */
+    struct Compound : Stmt {
+        Block* block; ///< pointer to the block containing the block items
+        Compound(Block* block, const Source_location& sl) : Stmt(Kind::Compound, sl), block(block) {}
+    };
+
+    /**
+     * A break statement inside a loop or a switch.
+     */
+    struct Break : Stmt {
+        std::string_view tag; ///< tag to the switch or loop that the break statement refers to
+        Break(const std::string_view sv, const Source_location& sl) : Stmt(Kind::Break, sl), tag(sv) {}
+    };
+
+    /**
+     * A continue statement inside a loop.
+     */
+    struct Continue : Stmt {
+        std::string_view tag; ///< tag to the loop that the continue statement refers to
+        Continue(const std::string_view sv, const Source_location& sl) : Stmt(Kind::Continue, sl), tag(sv) {}
+    };
+
+    /**
+     * A while loop statement.
+     */
+    struct While : Stmt {
+        Expr* condition;      ///< while the condition is true, the loop continues
+        Stmt* body;           ///< pointer to the loop body
+        std::string_view tag; ///< tag of the while loop to resolve break/continue statements
+        While(Expr* c, Stmt* b, const std::string_view t, const Source_location& sl)
+            : Stmt(Kind::While, sl), condition(c), body(b), tag(t) {}
+    };
+
+    /**
+     * A do while loop statement.
+     */
+    struct Do_while : Stmt {
+        Expr* condition;      ///< while the condition is true, the loop continues
+        Stmt* body;           ///< pointer to the loop body
+        std::string_view tag; ///< tag of the do while loop to resolve break/continue statements
+        Do_while(Expr* c, Stmt* b, std::string_view t, const Source_location& sl)
+            : Stmt(Kind::Do_while, sl), condition(c), body(b), tag(t) {}
+    };
+
+    /**
+     * A null statement.
+     */
+    struct Null : Stmt {
+        explicit Null(const Source_location& sl) : Stmt(Kind::Null, sl) {}
+    };
+
+    /**
+     * Any labeled statement (not including case and default labels in switch statements).
+     */
+    struct Labeled : Stmt {
+        std::string_view label; ///< identifier of the label
+        Stmt* stmt;             ///< pointer to the statement that is labeled
+        Labeled(const std::string_view l, Stmt* s, const Source_location& sl)
+            : Stmt(Kind::Labeled, sl), label(l), stmt(s) {}
+    };
+
+    /**
+     * A goto statement.
+     */
+    struct Goto : Stmt {
+        std::string_view label; ///< identifier of the label so jump to
+        Goto(const std::string_view s, const Source_location& sl) : Stmt(Kind::Goto, sl), label(s) {}
+    };
+
+    /**
+     * A switch statement.
+     */
+    struct Switch : Stmt {
+        bool has_default;     ///< true if the switch contains a default case
+        int* cases;           ///< array of integers that have a case in the switch
+        size_t n_cases;       ///< number of cases (not including the default case)
+        Expr* expr;           ///< expression that is investigated, must be an integer expression
+        Stmt* body;           ///< pointer to the body of the switch statement
+        std::string_view tag; ///< unique tag of the switch to resolve break statements
+        Switch(const bool hd, int* cs, const size_t n_cs, Expr* e, Stmt* s, const std::string_view t, const Source_location& sl)
+            : Stmt(Kind::Switch, sl), has_default(hd), cases(cs), n_cases(n_cs), expr(e), body(s), tag(t) {}
+
+        /**
+         * Constructs and returns a span over all cases for e.g. range based for loops.
+         * @return std::span over all cases
+         */
+        [[nodiscard]] std::span<int const> case_nums() const { return std::span(cases, n_cases); }
+    };
+
+    /**
+     * A case or default label inside a switch statement.
+     */
+    struct Switch_label : Stmt {
+        bool is_default;      ///< true for a default label, false for case labels
+        int value;            ///< case value, only used if not a default label
+        Stmt* stmt;           ///< pointer to the labeled statement
+        std::string_view tag; ///< tag to its parent switch statement
+
+        /// constructor for a case label
+        Switch_label(const int v, Stmt* s, const std::string_view t, const Source_location& sl)
+            : Stmt(Kind::Switch_label, sl), is_default(false), value(v), stmt(s), tag(t) {}
+
+        /// constructor for a default label
+        Switch_label(Stmt* s, const std::string_view t, const Source_location& sl)
+            : Stmt(Kind::Switch_label, sl), is_default(true), value(0), stmt(s), tag(t) {}
+    };
+
+    // TODO: comment
+    struct Expr_stmt : Stmt {
+        Expr* expr;
+        Expr_stmt(Expr* e, const Source_location& sl) : Stmt(Kind::Expr, sl), expr(e) {}
+    };
+
+    /**
+     * Error statement, which is returned when parsing a statement results in a catastrophic error after which the
+     * error recovery mode should be entered.
+     */
+    struct Error_stmt : Stmt {
+        explicit Error_stmt(const Source_location& sl) : Stmt(Kind::Error, sl) {}
+    };
+
+    /**
+     * A variable declaration node. Initializer is optional, should be a nullptr if it is absent.
+     */
+    struct Var_decl : Decl {
+        Expr* init; ///< optional pointer to initializer expression (nullptr if absent)
+        Var_decl(const std::string_view n, const Storage_class sc, Expr* e, const Source_location& sl)
+            : Decl(Kind::Var, n, sc, sl), init(e) {}
+    };
+
+    /**
+     * A function declaration node. The body is optional for forward declarations (no definition) an should be a nullptr
+     * in this case. Function parameters are a arena allocated array of Var_decl pointers.
+     */
+    struct Func_decl : Decl {
+        Var_decl** params; ///< arena allocated array of parameter declaration pointer
+        size_t n_params;   ///< number of function parameters
+        Block* body;       ///< pointer to the function body
+        Func_decl(const std::string_view n, const Storage_class sc, Var_decl** p, const size_t np, Block* b, const Source_location& sl)
+            : Decl(Kind::Func, n, sc, sl), params(p), n_params(np), body(b) {}
+        /**
+         * Returns a span over all parameter declarations for range-based for loops.
+         * @return std::span over all parameter declaration pointers
+         */
+        [[nodiscard]] std::span<Var_decl*> parameters() const { return std::span(params, n_params); }
+    };
+
+    /**
+     * The initialization clause of a for loop, either a declaration, an expression or absent.
+     */
+    struct For_init {
+        enum class Kind {None, Decl, Expr} kind; ///< kind of the initialization clause
+        union {
+            Var_decl* var_decl; ///< pointer to the init, in this case a declaration
+            Expr* expr;         ///< pointer to the init, in this case an expression
+        };
+        For_init() : kind(Kind::None), var_decl(nullptr) {}
+        explicit For_init(Var_decl* d) : kind(Kind::Decl), var_decl(d) {}
+        explicit For_init(Expr* e) : kind(Kind::Expr), expr(e) {}
+    };
+
+    /**
+     * A for loop statement.
+     */
+    struct For : Stmt {
+        For_init init;        ///< initialization fo the for loop variable
+        Expr* condition;      ///< while the condition is true, the loop continues
+        Expr* post;           ///< expression to execute after condition is checked to be true
+        Stmt* body;           ///< pointer to the loop body
+        std::string_view tag; ///< tag of the for loop to resolve break/continue statements
+        For(const For_init fi, Expr* c, Expr* p, Stmt* b, const std::string_view t, const Source_location& sl)
+            : Stmt(Kind::For, sl), init(fi), condition(c), post(p), body(b), tag(t) {}
+    };
+
+    /**
+     * The root node of the AST, representing a complete translation unit. Contains arena allocated
+     * array of top-level declarations.
+     */
+    struct Program {
+        Decl** decls;   ///< arena allocated array of top-level constructs
+        size_t n_decls; ///< number of top level constructs
+        Program(Decl** d, const size_t nd) : decls(d), n_decls(nd) {}
+
+        /**
+         * Constructs and returns a span over all top-level declarations for e.g. range based for loops.
+         * @return std::span over all top-level declarations
+         */
+        [[nodiscard]] std::span<Decl* const> declarations() const { return std::span(decls, n_decls); }
+    };
 }
 
-#endif //AST_OLD_HPP
+#endif //UNTITLED_AST_HPP

@@ -38,4 +38,20 @@ int compile_file(const File_info& fi, const Compiler_flags& cf);
 bool support_ansi_color();
 std::string demangle(const std::string& mangled_name);
 
+/**
+ * A wrapper for static_cast for nodes from e.g. the AST node. This makes debugging easier and centrally suppresses the
+ * clang-tidy warning, since mantis makes use of handwritten checked downcasting for the nodes so no vtable needs to be
+ * constructed which would increase memory cost.
+ * @tparam To
+ * @tparam From
+ * @param node
+ * @return
+ */
+template<typename To, typename From>
+To* cast(From* node) {
+    assert(node != nullptr && "casting nullptr");
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
+    return static_cast<To*>(node);
+}
+
 #endif //UTIL_HPP

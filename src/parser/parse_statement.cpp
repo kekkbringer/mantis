@@ -58,20 +58,20 @@ void Parser::synchronize_stmt() {
  * pointer to an ErrorStmt node ourselves.
  * @return
  */
-ast::Statement_ptr Parser::parse_statement() {
+ast::Stmt* Parser::parse_statement() {
     // if we are already in error recovery mode -> synchronize
     if (in_error_recovery) {
         synchronize_stmt();
-        return ast::ErrorStmt_ptr();
+        return arena->allocate<ast::Error_stmt>(Source_location());
     }
 
     // call actual parsing function
-    auto stmt_ptr = parse_statement_inner();
+    const auto stmt_ptr = parse_statement_inner();
 
     // check if catastrophic error was encountered
-    if (std::holds_alternative<ast::ErrorStmt_ptr>(stmt_ptr)) {
+    if (stmt_ptr->kind == ast::Stmt::Kind::Error) {
         synchronize_stmt();
-        return ast::ErrorStmt_ptr();
+        return stmt_ptr;
     }
 
     return stmt_ptr;
@@ -92,25 +92,28 @@ ast::For_init Parser::parse_for_init() {
         }
 
         auto decl = parse_declaration();
-        if (not std::holds_alternative<ast::Variable_declaration_ptr>(decl)) {
+        if (decl->kind != ast::Decl::Kind::Var) {
             diag.report_issue(Severity::Error, current, Error_kind::Expected_statement, "in for loop initialization");
+            return ast::For_init();
+        } else {
+            const auto var_decl = cast<ast::Var_decl>(decl);
+            return ast::For_init(var_decl);
         }
-        return decl;
 
     // empty
     } else if (la_type == Token_type::Semicolon) {
         scan();
-        return std::monostate{};
+        return ast::For_init();
 
     // expression
     } else {
         auto expr = parse_expression(0);
-        if (std::holds_alternative<ast::ErrorExpr_ptr>(expr)) return expr;
+        if (expr->kind == ast::Expr::Kind::Error) return ast::For_init();
         if (la_type != Token_type::Semicolon) {
             report_syntax_error(Severity::Error, look_ahead, Error_kind::Missing_semicolon, "after expression in for loop initialization");
-            return ast::ErrorExpr_ptr();
+            return ast::For_init();
         } else scan();
-        return expr;
+        return ast::For_init(expr);
     }
 }
 
@@ -125,13 +128,15 @@ ast::For_init Parser::parse_for_init() {
 *               | <block>
 * @return unique_ptr to a statement node
 */
-ast::Statement_ptr Parser::parse_statement_inner() {
+ast::Stmt* Parser::parse_statement_inner() {
+    const auto loc = current.location;
+
     switch (la_type) {
         // return statement
         case Token_type::return_: {
             scan(); // return token
             auto expr = parse_expression(0);
-            if (std::holds_alternative<ast::ErrorExpr_ptr>(expr)) return ast::ErrorStmt_ptr();
+            if (expr->kind == ast::Expr::Kind::Error) return arena->allocate<ast::Error_stmt>(Source_location());
             if (la_type != Token_type::Semicolon) {
                 // check if it's just a stray token
                 if (lexer.peek(0).type == Token_type::Semicolon) {
@@ -141,10 +146,10 @@ ast::Statement_ptr Parser::parse_statement_inner() {
                 // not just a stray token -> enter recovery mode
                 } else {
                     report_syntax_error(Severity::Error, look_ahead, Error_kind::Missing_semicolon, "at end of return statement");
-                    return ast::ErrorStmt_ptr();
+                    return arena->allocate<ast::Error_stmt>(Source_location());
                 }
             } else scan();
-            return std::make_unique<ast::Return>(std::move(expr));
+            return arena->allocate<ast::Return>(expr, loc);
         }
 
         // case label
@@ -167,7 +172,7 @@ ast::Statement_ptr Parser::parse_statement_inner() {
                 // not just a stray token -> enter recovery mode
                 } else {
                     report_syntax_error(Severity::Error, look_ahead, Error_kind::Case_without_case);
-                    return ast::ErrorStmt_ptr();
+                    return arena->allocate<ast::Error_stmt>(Source_location());
                 }
 
             } else {
@@ -183,7 +188,7 @@ ast::Statement_ptr Parser::parse_statement_inner() {
                 // not just a stray token -> enter recovery mode
                 } else {
                     report_syntax_error(Severity::Error, look_ahead, Error_kind::Missing_colon, "after case label");
-                    return ast::ErrorStmt_ptr();
+                    return arena->allocate<ast::Error_stmt>(Source_location());
                 }
             } else scan();
             auto stmt = parse_statement();
@@ -195,7 +200,7 @@ ast::Statement_ptr Parser::parse_statement_inner() {
                 }
                 current_switch_cases.back().insert(val);
             }
-            return std::make_unique<ast::Case>(ast::Case(val, ".case." + std::to_string(val) + "." + tag, std::move(stmt)));
+            return arena->allocate<ast::Switch_label>(val, stmt, ".case." + std::to_string(val) + "." + tag, loc);
         }
 
         // default label
@@ -217,7 +222,7 @@ ast::Statement_ptr Parser::parse_statement_inner() {
                     diag.report_issue(Severity::Error, current, Error_kind::Duplicate_default, "");
                 current_switch_has_default.back() = true;
             }
-            return std::make_unique<ast::Default>(ast::Default(".default." + tag, std::move(stmt)));
+            return arena->allocate<ast::Switch_label>(stmt, ".default." + tag, loc);
         }
 
         // switch statement
@@ -225,7 +230,7 @@ ast::Statement_ptr Parser::parse_statement_inner() {
             scan(); // 'switch' token
             expect(Token_type::Open_parenthesis, Error_kind::Missing_open_parenthesis, "after switch keyword");
             auto expr = parse_expression(0);
-            if (std::holds_alternative<ast::ErrorExpr_ptr>(expr)) return ast::ErrorStmt_ptr();
+            if (expr->kind == ast::Expr::Kind::Error) return arena->allocate<ast::Error_stmt>(loc);
             expect(Token_type::Close_parenthesis, Error_kind::Missing_closing_parenthesis, "after expression in switch statement");
 
             // tag switch and push to control target stack
@@ -240,15 +245,18 @@ ast::Statement_ptr Parser::parse_statement_inner() {
             auto stmt = parse_statement();
 
             // transfer all cases to AST node
-            auto switch_ptr = std::make_unique<ast::Switch>(ast::Switch(current_switch_has_default.back(),
-                                                             std::move(current_switch_cases.back()),
-                                                             std::move(expr), std::move(stmt), tag));
+            const bool has_def = current_switch_has_default.back();
+            const size_t n_case = current_switch_cases.back().size();
+
+            int* cases = arena->allocate_array<int>(n_case);
+            std::ranges::copy(current_switch_cases.back(), cases);
+            auto switch_ptr = arena->allocate<ast::Switch>(has_def, cases, n_case, expr, stmt, tag, loc);
+
             current_switch_cases.pop_back();
             current_switch_has_default.pop_back();
             control_stack.pop_back();
             return switch_ptr;
         }
-
 
 
         // do while loop
@@ -268,12 +276,12 @@ ast::Statement_ptr Parser::parse_statement_inner() {
             expect(Token_type::Open_parenthesis, Error_kind::Missing_open_parenthesis, "after while keyword in do-while loop");
 
             auto cond = parse_expression(0);
-            if (std::holds_alternative<ast::ErrorExpr_ptr>(cond)) return ast::ErrorStmt_ptr();
+            if (cond->kind == ast::Expr::Kind::Error) return arena->allocate<ast::Error_stmt>(loc);
 
             expect(Token_type::Close_parenthesis, Error_kind::Missing_closing_parenthesis, "after statement in do-while loop");
             expect(Token_type::Semicolon, Error_kind::Missing_semicolon, "at end of do-while loop");
 
-            return std::make_unique<ast::Do_while>(std::move(stmt), std::move(cond), tag);
+            return arena->allocate<ast::Do_while>(cond, stmt, tag, loc);
         }
 
         // while loop
@@ -281,7 +289,7 @@ ast::Statement_ptr Parser::parse_statement_inner() {
             scan(); // 'while' token
             expect(Token_type::Open_parenthesis, Error_kind::Missing_open_parenthesis, "after while keyword");
             auto cond = parse_expression(0);
-            if (std::holds_alternative<ast::ErrorExpr_ptr>(cond)) return ast::ErrorStmt_ptr();
+            if (cond->kind == ast::Expr::Kind::Error) return arena->allocate<ast::Error_stmt>(loc);
             expect(Token_type::Close_parenthesis, Error_kind::Missing_closing_parenthesis, "after condition in while statement");
 
             // tag while loop and push to control target stack
@@ -293,7 +301,7 @@ ast::Statement_ptr Parser::parse_statement_inner() {
             // pop it from the control target stack
             control_stack.pop_back();
 
-            return std::make_unique<ast::While>(std::move(cond), std::move(stmt), tag);
+            return arena->allocate<ast::While>(cond, stmt, tag, loc);
         }
 
         // for loop
@@ -308,7 +316,7 @@ ast::Statement_ptr Parser::parse_statement_inner() {
                 // not just a stray token -> enter recovery mode
                 } else {
                     report_syntax_error(Severity::Error, look_ahead, Error_kind::Missing_open_parenthesis, "at beginning of for loop header");
-                    return ast::ErrorStmt_ptr();
+                    return arena->allocate<ast::Error_stmt>(loc);
                 }
             } else scan();
 
@@ -321,11 +329,11 @@ ast::Statement_ptr Parser::parse_statement_inner() {
             auto init = parse_for_init();
 
             // [ <exp> ] ";"
-            ast::Expression_ptr cond = std::monostate{};
+            ast::Expr* cond = nullptr;
             if (la_type == Token_type::Semicolon) scan();
             else {
                 cond = parse_expression(0);
-                if (std::holds_alternative<ast::ErrorExpr_ptr>(cond)) return ast::ErrorStmt_ptr();
+                if (cond->kind == ast::Expr::Kind::Error) return arena->allocate<ast::Error_stmt>(loc);
                 if (la_type != Token_type::Semicolon) {
                     // check if it's just a stray token
                     if (lexer.peek(0).type == Token_type::Semicolon) {
@@ -334,16 +342,16 @@ ast::Statement_ptr Parser::parse_statement_inner() {
                     // not just a stray token -> enter recovery mode
                     } else {
                         report_syntax_error(Severity::Error, look_ahead, Error_kind::Missing_semicolon, "after condition in for loop header");
-                        return ast::ErrorStmt_ptr();
+                        return arena->allocate<ast::Error_stmt>(loc);
                     }
                 } else scan();
             }
 
             // [ <exp> ] ")"
-            ast::Expression_ptr post = std::monostate{};
+            ast::Expr* post = nullptr;
             if (la_type != Token_type::Close_parenthesis) {
                 post = parse_expression(0);
-                if (std::holds_alternative<ast::ErrorExpr_ptr>(post)) return ast::ErrorStmt_ptr();
+                if (post->kind == ast::Expr::Kind::Error) return arena->allocate<ast::Error_stmt>(loc);
             }
             if (la_type != Token_type::Close_parenthesis) {
                 // check if it's just a stray token
@@ -353,7 +361,7 @@ ast::Statement_ptr Parser::parse_statement_inner() {
                 // not just a stray token -> enter recovery mode
                 } else {
                     report_syntax_error(Severity::Error, look_ahead, Error_kind::Missing_closing_parenthesis, "after for loop header");
-                    return ast::ErrorStmt_ptr();
+                    return arena->allocate<ast::Error_stmt>(loc);
                 }
             } else scan();
 
@@ -364,7 +372,7 @@ ast::Statement_ptr Parser::parse_statement_inner() {
             leave_scope();
             control_stack.pop_back();
 
-            return std::make_unique<ast::For>(std::move(init), std::move(cond), std::move(post), std::move(stmt), tag);
+            return arena->allocate<ast::For>(init, cond, post, stmt, tag, loc);
         }
 
         // continue statement
@@ -377,7 +385,7 @@ ast::Statement_ptr Parser::parse_statement_inner() {
             }
             if (tag.empty()) diag.report_issue(Severity::Error, current, Error_kind::Continue_outside_loop);
             expect(Token_type::Semicolon, Error_kind::Missing_semicolon, "after continue statement");
-            return std::make_unique<ast::Continue>(tag);
+            return arena->allocate<ast::Continue>(tag, loc);
         }
 
         // break statement
@@ -387,13 +395,13 @@ ast::Statement_ptr Parser::parse_statement_inner() {
             const std::string tag = (control_stack.empty() ? "" : control_stack.back().tag);
             if (tag.empty()) diag.report_issue(Severity::Error, current, Error_kind::Break_outside_control_target);
             expect(Token_type::Semicolon, Error_kind::Missing_semicolon, "after break statement");
-            return std::make_unique<ast::Break>(tag);
+            return arena->allocate<ast::Break>(tag, loc);
         }
 
         // block statement
         case Token_type::Open_brace: {
-            auto block = parse_block(true); // true = enter new scope on block enter
-            return std::make_unique<ast::Compound>(ast::Compound{std::make_unique<ast::Block>(std::move(block))});
+            ast::Block* block = parse_block(true); // true = enter new scope on block enter
+            return arena->allocate<ast::Compound>(block, loc);
         }
 
         // if statement
@@ -401,24 +409,24 @@ ast::Statement_ptr Parser::parse_statement_inner() {
             scan(); // "if" token
             expect(Token_type::Open_parenthesis, Error_kind::Missing_open_parenthesis, " after 'if'");
             auto cond = parse_expression(0);
-            if (std::holds_alternative<ast::ErrorExpr_ptr>(cond)) return ast::ErrorStmt_ptr();
+            if (cond->kind == ast::Expr::Kind::Error) return arena->allocate<ast::Error_stmt>(loc);
             expect(Token_type::Close_parenthesis, Error_kind::Missing_closing_parenthesis, " after condition in if-statement");
             auto then = parse_statement();
-            if (std::holds_alternative<ast::ErrorStmt_ptr>(then)) return ast::ErrorStmt_ptr();
+            if (then->kind == ast::Stmt::Kind::Error) return arena->allocate<ast::Error_stmt>(loc);
 
             if (la_type == Token_type::else_) {
                 scan(); // "else" token
                 auto else_ = parse_statement();
-                return std::make_unique<ast::If>(std::move(cond), std::move(then), std::move(else_));
+                return arena->allocate<ast::If>(cond, then, else_, loc);
             } else {
-                return std::make_unique<ast::If>(std::move(cond), std::move(then));
+                return arena->allocate<ast::If>(cond, then, nullptr, loc);
             }
         }
 
         // null statement
         case Token_type::Semicolon: {
             scan();
-            return std::make_unique<ast::Null>();
+            return arena->allocate<ast::Null>(loc);
         }
 
         // goto statement
@@ -442,7 +450,7 @@ ast::Statement_ptr Parser::parse_statement_inner() {
             expect(Token_type::Identifier, Error_kind::Missing_label, "after goto");
             expect(Token_type::Semicolon, Error_kind::Missing_semicolon, "at end of goto statement");
 
-            return std::make_unique<ast::Goto>(ast::Goto(label));
+            return arena->allocate<ast::Goto>(ast::Goto(label, loc));
         }
 
         // labeled statement
@@ -476,7 +484,7 @@ ast::Statement_ptr Parser::parse_statement_inner() {
                 scan(); // colon
 
                 auto stmt = parse_statement();
-                return std::make_unique<ast::Labeled>(label, std::move(stmt));
+                return arena->allocate<ast::Labeled>(label, stmt, loc);
             }
             // if not a labeled statement, it's an expression statement, so just fallthrough to default case
         }
@@ -485,7 +493,7 @@ ast::Statement_ptr Parser::parse_statement_inner() {
         [[fallthrough]];
         default: {
             auto expr = parse_expression(0);
-            if (std::holds_alternative<ast::ErrorExpr_ptr>(expr)) return ast::ErrorStmt_ptr();
+            if (expr->kind == ast::Expr::Kind::Error) return arena->allocate<ast::Error_stmt>(loc);
             if (la_type != Token_type::Semicolon) {
                 // check if it's just a stray token
                 if (lexer.peek(0).type == Token_type::Semicolon) {
@@ -494,10 +502,10 @@ ast::Statement_ptr Parser::parse_statement_inner() {
                 // not just a stray token -> enter recovery mode
                 } else {
                     report_syntax_error(Severity::Error, look_ahead, Error_kind::Missing_semicolon, "at end of expression statement");
-                    return ast::ErrorStmt_ptr();
+                    return arena->allocate<ast::Error_stmt>(loc);
                 }
             } else scan();
-            return expr;
+            return arena->allocate<ast::Expr_stmt>(expr, loc);
         }
     }
 }

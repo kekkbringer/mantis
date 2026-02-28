@@ -17,7 +17,7 @@ struct Symbol {
     std::string name;
     std::string unique_name;
     std::shared_ptr<Type> type = nullptr;
-    ast::Decl_view decl;
+    ast::Decl* decl;
     enum class Linkage {None, Internal, External} linkage = Linkage::None;
     enum class Storage_duration {Automatic, Static} storage_duration = Storage_duration::Automatic;
     enum class Init {Tentative, Initial, None} init;
@@ -244,19 +244,10 @@ public:
 };
 
 /**
- * @brief Checks for the type of the declaration that's saved in the symbol and returns the appropriate location.
+ * @brief Returns the location in the source code of the symbol in question.
  */
 inline Source_location get_location(const Symbol* sym) {
-    return std::visit([&]<class T0>(T0&& arg) -> Source_location {
-        using T = std::decay_t<T0>;
-        if constexpr (std::is_same_v<T, ast::Variable_declaration*> ||
-                      std::is_same_v<T, ast::Function_declaration*>) {
-            return arg->loc;
-        } else {
-            assert(false && "else branch in get_location");
-            return {};
-        }
-    }, sym->decl);
+    return sym->decl->loc;
 }
 
 #endif //SYMBOL_TABLE_HPP

@@ -20,7 +20,7 @@
  */
 class Tac_generator {
 private:
-    const ast::Program prog;     ///< AST program tree to be translated to the TAC
+    const ast::Program* prog;     ///< AST program tree to be translated to the TAC
     Scope* file_scope = nullptr; ///< Symbol table (Pointer to file/global scope
     int tmp_counter = 0;         ///< keeps track of the number of temporary variables for name generation
     int label_counter = 0;       ///< keeps track of the number of internal labels for name generation
@@ -28,11 +28,11 @@ private:
     tac::Program gen_program();
     void traverse_scope(Scope* scope, tac::Program& tac_prog);
 
-    tac::Top_level_ptr translate_declaration(const ast::Declaration_ptr & decl);
-    tac::Function translate_function_decl(const ast::Function_declaration_ptr& fdecl);
-    void translate_block_item(const ast::Block_item_ptr &bitem, std::vector<tac::Instruction_ptr> &insts);
-    void translate_statement(const ast::Statement_ptr &stmt, std::vector<tac::Instruction_ptr> &insts);
-    tac::Value translate_expression(const ast::Expression_ptr &expr, std::vector<tac::Instruction_ptr> &insts);
+    tac::Top_level_ptr translate_declaration(const ast::Decl* decl);
+    tac::Function translate_function_decl(const ast::Func_decl* fdecl);
+    void translate_block_item(const ast::Block_item* bitem, std::vector<tac::Instruction_ptr> &insts);
+    void translate_statement(const ast::Stmt* stmt, std::vector<tac::Instruction_ptr> &insts);
+    tac::Value translate_expression(const ast::Expr* expr, std::vector<tac::Instruction_ptr> &insts);
 
     /**
      * This function will generate a new, unique name for a temporary variable.
@@ -79,7 +79,7 @@ private:
     }
 
 public:
-    explicit Tac_generator(ast::Program& prog, Scope* fs) : prog(std::move(prog)), file_scope(fs) {}
+    explicit Tac_generator(const ast::Program* prog, Scope* fs) : prog(prog), file_scope(fs) {}
 
     /**
      * Main routine that translates a program from a general abstract syntax tree to a three address code (TAC)

@@ -51,7 +51,7 @@ int compile_file(const File_info& fi, const Compiler_flags& cf) {
     if (const int status = diag_engine.status(); status != 0) return status;
 #ifdef DEBUG_MODE
     std::cout << "\n\nprinting AST program:\n";
-    Parser::print_program(prog);
+    //Parser::print_program(prog); //TODO: uncomment again
 #endif
     if (cf.stop_after_parser) return 0;
 

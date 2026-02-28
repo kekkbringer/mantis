@@ -50,11 +50,11 @@ int binop_prec(const Token_type& tt) {
 * @param min_prec minimum precedence of the next operator required for nesting
 * @return unique_ptr to an expression node
 */
-ast::Expression_ptr Parser::parse_expression(const int min_prec) {
+ast::Expr* Parser::parse_expression(const int min_prec) {
     // left associativity
     auto lhs = parse_factor();
     // check for catastrophic error from parse_factor
-    if (std::holds_alternative<ast::ErrorExpr_ptr>(lhs)) return lhs;
+    if (lhs->kind == ast::Expr::Kind::Error) return lhs;
 
     // binary operator
     while (look_ahead.is_binary() and binop_prec(la_type) >= min_prec) {
@@ -66,27 +66,27 @@ ast::Expression_ptr Parser::parse_expression(const int min_prec) {
         if (op == Token_type::Assign) {
             // test if lhs is a valid lvalue
             // so far only variables are valid lvalues
-            if (not std::holds_alternative<ast::Variable_ptr>(lhs)) {
+            if (lhs->kind != ast::Expr::Kind::Variable) {
                 diag.report_issue(Severity::Error, current, Error_kind::Invalid_lvalue, "in assignment");
             }
             scan();
 
             auto rhs = parse_expression(binop_prec(current.type));
             // check for catastrophic error from parse_factor
-            if (std::holds_alternative<ast::ErrorExpr_ptr>(rhs)) return rhs;
-            lhs = std::make_unique<ast::Assignment>(std::move(lhs), std::move(rhs));
+            if (rhs->kind == ast::Expr::Kind::Error) return rhs;
+            lhs = arena->allocate<ast::Assignment>(lhs, rhs, Source_location());
 
         // conditional expression ? :
         } else if (op == Token_type::Question_mark) {
             scan();
             auto mhs = parse_expression(0);
             // check for catastrophic error from parse_factor
-            if (std::holds_alternative<ast::ErrorExpr_ptr>(mhs)) return mhs;
+            if (mhs->kind == ast::Expr::Kind::Error) return mhs;
             scan(); // ':' token
             auto rhs = parse_expression(binop_prec(Token_type::Question_mark));
             // check for catastrophic error from parse_factor
-            if (std::holds_alternative<ast::ErrorExpr_ptr>(rhs)) return rhs;
-            lhs = std::make_unique<ast::Conditional>(std::move(lhs), std::move(mhs), std::move(rhs));
+            if (rhs->kind == ast::Expr::Kind::Error) return rhs;
+            lhs = arena->allocate<ast::Conditional>(lhs, mhs, rhs, Source_location());
 
         // compound and true binary
         } else {
@@ -94,7 +94,7 @@ ast::Expression_ptr Parser::parse_expression(const int min_prec) {
             if (op_token.is_compound()) {
                 // test if lhs is a valid lvalue
                 // so far only variables are valid lvalues
-                if (not std::holds_alternative<ast::Variable_ptr>(lhs)) {
+                if (lhs->kind != ast::Expr::Kind::Variable) {
                     diag.report_issue(Severity::Error, current, Error_kind::Invalid_lvalue, "in compound assignment");
                 }
                 scan();
@@ -102,7 +102,7 @@ ast::Expression_ptr Parser::parse_expression(const int min_prec) {
                 // parse rhs of binary expression (right associative)
                 auto rhs = parse_expression(binop_prec(current.type));
                 // check for catastrophic error from parse_factor
-                if (std::holds_alternative<ast::ErrorExpr_ptr>(rhs)) return rhs;
+                if (rhs->kind == ast::Expr::Kind::Error) return rhs;
 
                 // first, make operational expression
                 ast::Binary_operator ast_op;
@@ -120,11 +120,13 @@ ast::Expression_ptr Parser::parse_expression(const int min_prec) {
                     default:
                         diag.report_issue(Severity::Error, current, Error_kind::Unknown, "binary compound operator");
                 }
-                ast::Variable_ptr var_copy;
-                if (std::holds_alternative<ast::Variable_ptr>(lhs))
-                    var_copy = std::make_unique<ast::Variable>(*std::get<ast::Variable_ptr>(lhs));
-                rhs = std::make_unique<ast::Binary>(ast_op, std::move(var_copy), std::move(rhs));
-                lhs = std::make_unique<ast::Assignment>(std::move(lhs), std::move(rhs));
+                ast::Variable* var_copy;
+                if (lhs->kind == ast::Expr::Kind::Variable) {
+                    const auto vdecl = cast<ast::Variable const>(var_copy);
+                    var_copy = arena->allocate<ast::Variable>(vdecl->name, Source_location());
+                }
+                rhs = arena->allocate<ast::Binary>(ast_op, var_copy, rhs, Source_location());
+                lhs = arena->allocate<ast::Assignment>(lhs, rhs, Source_location());
 
             // normal binary operation (non-compound, non-assignment)
             } else {
@@ -132,7 +134,7 @@ ast::Expression_ptr Parser::parse_expression(const int min_prec) {
                 // parse rhs of binary expression (left associative, hence prec+1)
                 auto rhs = parse_expression(binop_prec(current.type) + 1);
                 // check for catastrophic error from parse_factor
-                if (std::holds_alternative<ast::ErrorExpr_ptr>(rhs)) return rhs;
+                if (rhs->kind == ast::Expr::Kind::Error) return rhs;
 
                 ast::Binary_operator ast_op;
                 switch (op) {
@@ -160,7 +162,7 @@ ast::Expression_ptr Parser::parse_expression(const int min_prec) {
                 }
 
                 // put lhs and rhs together
-                lhs = std::make_unique<ast::Binary>(ast_op, std::move(lhs), std::move(rhs));
+                lhs = arena->allocate<ast::Binary>(ast_op, lhs, rhs, Source_location());
             }
         }
     }
