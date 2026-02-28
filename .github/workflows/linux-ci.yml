@@ -94,7 +94,6 @@ jobs:
 
 
   docs:
-    if: false
     runs-on: ubuntu-latest
     needs: release
     permissions:
