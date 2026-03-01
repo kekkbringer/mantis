@@ -1,197 +1,233 @@
 //
-// Created by dominik on 7/8/25.
+// Created by dominik on 3/1/26.
 //
 
 #ifndef TAC_HPP
 #define TAC_HPP
 
-#include <utility>
-#include <variant>
-#include <memory>
-#include <vector>
+#include <string_view>
+#include <span>
+#include <cstddef>
 
 #include "tac_unary_operator.hpp"
 #include "tac_binary_operator.hpp"
 
 /**
- * Holds all classes that make up the three address code (TAC) program tree structure.
+ * Holds all structs that make up the three address code (TAC) program tree structure.
  */
 namespace tac {
-    class Function;          typedef std::unique_ptr<Function> Function_ptr;
-    class Static_variable;   typedef std::unique_ptr<Static_variable> Static_variable_ptr;
-    using Top_level_ptr = std::variant<Function_ptr, Static_variable_ptr>;
-
-    using Program = std::vector<Top_level_ptr>;
-
-    // instructions
-    class Return;            typedef std::unique_ptr<Return> Return_ptr;
-    class Unary;             typedef std::unique_ptr<Unary> Unary_ptr;
-    class Binary;            typedef std::unique_ptr<Binary> Binary_ptr;
-    class Copy;              typedef std::unique_ptr<Copy> Copy_ptr;
-    class Jump;              typedef std::unique_ptr<Jump> Jump_ptr;
-    class Jump_if_zero;      typedef std::unique_ptr<Jump_if_zero> Jump_if_zero_ptr;
-    class Jump_if_not_zero;  typedef std::unique_ptr<Jump_if_not_zero> Jump_if_not_zero_ptr;
-    class Label;             typedef std::unique_ptr<Label> Label_ptr;
-    class Function_call;     typedef std::unique_ptr<Function_call> Function_call_ptr;
-    using Instruction_ptr = std::variant<Return_ptr, Unary_ptr, Binary_ptr, Copy_ptr, Jump_ptr,
-                                         Jump_if_zero_ptr, Jump_if_not_zero_ptr, Label_ptr, Function_call_ptr>;
-
-    // values
-    class Constant; typedef std::unique_ptr<Constant> Constant_ptr;
-    class Variable; typedef std::unique_ptr<Variable> Variable_ptr;
-
     /**
-     * TAC constant node.
-     * So far only integer constants are considered.
+     * Any TAC value like integer constant and variables.
      */
-    class Constant {
-    public:
-        int val; ///< value of the integer constant
+    struct Value {
+        enum class Kind {
+            Int_constant, // integer constant
+            Variable,     // variable
+        } kind; ///< indicates kind of value
 
-        Constant() : val(0) {}
-        explicit Constant(const int val) : val(val) {}
+        union {
+            int int_val;           ///< value of an integer constant
+            std::string_view name; ///< name of a variable
+        };
+
+    private:
+        Value() : kind(Kind::Int_constant), int_val(0) {} // used in factory methods
+
+    public:
+        /**
+         * Factory method for a TAC integer constant.
+         */
+        static constexpr Value make_int(const int val) {
+            Value v; v.kind = Kind::Int_constant; v.int_val = val; return v;
+        }
+
+        /**
+         * Factory method for a TAC variable.
+         */
+        static constexpr Value make_variable(const std::string_view name) {
+            Value v; v.kind = Kind::Variable; v.name = name; return v;
+        }
     };
 
     /**
-     * TAC variable node.
+     * Base class for all TAC instructions.
      */
-    class Variable {
-    public:
-        std::string name; ///< name of the variable
+    struct Inst {
+        enum class Kind {
+            Return,
+            Unary,
+            Binary,
+            Copy,
+            Jump,
+            Jump_if_zero,
+            Jump_if_not_zero,
+            Label,
+            Function_call,
+        } kind; ///< indicates kind of TAC instruction
 
-        Variable() : name("") {}
-        explicit Variable(const std::string& name) : name(name) {};
+    protected:
+        explicit Inst(const Kind k) : kind(k) {}
     };
 
     /**
-     * Variant that holds the different kinds of value nodes of the TAC tree. A TAC value can either be a constant or
-     * a variable.
+     * TAC return instruction.
      */
-    using Value = std::variant<std::monostate, Constant, Variable>;
+    struct Return : Inst {
+        Value val; ///< value to return
 
-    /**
-     * Smart pointer to a TAC value.
-     */
-    using Value_ptr = std::unique_ptr<Value>;
-
-    /**
-     * TAC function node.
-     * This is one of the possible top level constructs of a TAC program.
-     */
-    class Function {
-    public:
-        std::string name; ///< name of the function
-        bool global = false;
-        std::vector<std::string> params;
-        std::vector<Instruction_ptr> insts; ///< list of pointer to the instructions that make up the function body
+        explicit Return(const Value &val)
+            : Inst(Kind::Return), val(val) {}
     };
 
     /**
-     * TAC static variable node.
-     * This is one of the possible top level constructs for a TAC program.
+     * TAC unary operation instruction.
      */
-    class Static_variable {
-    public:
-        std::string name; ///< name of the static variable
-        bool global; ///< indicates whether the static variable has global scoping
-        int init; ///< initial value of the static variable
+    struct Unary : Inst {
+        Unary_operator op; ///< type of unary operation
+        Value src;         ///< source operand
+        Value dst;         ///< destination operand
+
+        Unary(const Unary_operator op, const Value &src, const Value &dst)
+            : Inst(Kind::Unary), op(op), src(src), dst(dst) {}
     };
 
     /**
-     * TAC return statement node.
+     * TAC binary operation instruction.
      */
-    class Return {
-    public:
-        Value_ptr val; ///< value to be returned
+    struct Binary : Inst {
+        Binary_operator op; ///< type of binary operation
+        Value lhs;          ///< left-hand side operand
+        Value rhs;          ///< right-hand side operand
+        Value dst;          ///< destination operand
 
-        explicit Return(const Value& val) : val(std::make_unique<Value>(val)) {}
+        Binary(const Binary_operator op, const Value &lhs, const Value &rhs, const Value &dst)
+            : Inst(Kind::Binary), op(op), lhs(lhs), rhs(rhs), dst(dst) {}
     };
 
     /**
-     * General TAC unary operation node.
+     * TAC copy instruction.
      */
-    class Unary {
-    public:
-        Unary_operator op; ///< type of the unary operation
-        Value_ptr src; ///< source that the unary operation acts on
-        Value_ptr dst; ///< destination, where the result of the unary expression will be stored.
+    struct Copy : Inst {
+        Value src; ///< value to copy
+        Value dst; ///< destination to copy to
 
-        Unary(const Unary_operator op, const Value& src, const Value& dst)
-        : op(op), src(std::make_unique<Value>(src)), dst(std::make_unique<Value>(dst)) {}
+        Copy(const Value &src, const Value &dst)
+            : Inst(Kind::Copy), src(src), dst(dst) {}
     };
 
     /**
-     * General TAC binary expression node.
+     * TAC unconditional jump instruction.
      */
-    class Binary {
-    public:
-        Binary_operator op; ///< type of the binary operation
-        Value_ptr lhs; ///< left-hand side of the binary operation
-        Value_ptr rhs; ///< right-hand side of the binary operation
-        Value_ptr dst; ///< destination of the result of the binary expression
+    struct Jump : Inst {
+        std::string_view target; ///< interned name of the target label
 
-        Binary(const Binary_operator op, const Value& lhs, const Value& rhs, const Value& dst)
-        : op(op), lhs(std::make_unique<Value>(lhs)), rhs(std::make_unique<Value>(rhs)), dst(std::make_unique<Value>(dst)) {}
+        explicit Jump(const std::string_view target)
+            : Inst(Kind::Jump), target(target) {}
     };
 
     /**
-     * TAC copy instruction node.
+     * TAC jump if zero instruction.
      */
-    class Copy {
-    public:
-        Value_ptr src; ///< value to be copied to the destination
-        Value_ptr dst; ///< target to of copy instruction
+    struct Jump_if_zero : Inst {
+        Value cond;              ///< condition value, jump taken if zero
+        std::string_view target; ///< interned name of the target label
 
-        Copy(const Value& src, const Value& dst) : src(std::make_unique<Value>(src)), dst(std::make_unique<Value>(dst)) {}
+        Jump_if_zero(const Value &cond, const std::string_view target)
+            : Inst(Kind::Jump_if_zero), cond(cond), target(target) {}
     };
 
     /**
-     * TAC jump statement node.
+     * TAC jump if not zero instruction.
      */
-    class Jump {
-    public:
-        std::string target; ///< name of the target label to be jumped to
+    struct Jump_if_not_zero : Inst {
+        Value cond;              ///< condition value, jump taken if not zero
+        std::string_view target; ///< interned name of the target label
+
+        Jump_if_not_zero(const Value &cond, const std::string_view target)
+            : Inst(Kind::Jump_if_not_zero), cond(cond), target(target) {}
     };
 
     /**
-     * TAC jump if zero statement node.
+     * TAC label instruction, acts as target for jump instructions.
      */
-    class Jump_if_zero {
-    public:
-        Value_ptr cond; ///< if condition is zero, jump will be taken
-        std::string target; ///< name of the target label to be jumped to
+    struct Label : Inst {
+        std::string_view name; ///< interned name of the label
 
-        Jump_if_zero(const Value& c, std::string t) : cond(std::make_unique<Value>(c)), target(std::move(t)) {}
+        explicit Label(const std::string_view name)
+            : Inst(Kind::Label), name(name) {}
     };
 
     /**
-     * TAC jump if not zero statement node.
+     * TAC function call instruction.
      */
-    class Jump_if_not_zero {
-    public:
-        Value_ptr cond; ///< if condition is not zero, jump will be taken
-        std::string target; ///< name of the target label to be jumped to
+    struct Function_call : Inst {
+        std::string_view name; ///< interned name of the function to call
+        Value* args;           ///< arena-allocated array of argument values
+        size_t n_args;         ///< number of arguments
+        Value dst;             ///< destination for the return value
 
-        Jump_if_not_zero(const Value& c, std::string t) : cond(std::make_unique<Value>(c)), target(std::move(t)) {}
+        Function_call(const std::string_view name, Value* args, const size_t n_args, const Value &dst)
+            : Inst(Kind::Function_call), name(name), args(args), n_args(n_args), dst(dst) {}
+
+        /**
+         * Constructs and returns a span over all arguments of the function call for e.g. a range based for loop.
+         * @return std::spawn over arguments
+         */
+        [[nodiscard]] std::span<Value> arguments() const { return {args, n_args}; }
     };
 
     /**
-     * TAC label node.
-     * Acts as target for jump statements.
+     * A TAC function node.
      */
-    class Label {
-    public:
-        std::string name; ///< name of the label
+    struct Function {
+        std::string_view name;    ///< name of the function
+        bool global;              ///< indicates whether the function is global
+        std::string_view* params; ///< array of names of parameters
+        size_t n_params;          ///< number of parameters
+        Inst** insts;             ///< arena allocated array of pointer to the instructions in the function body
+        size_t n_insts;           ///< number of instructions in function
+
+        Function(const std::string_view n, const bool g, std::string_view* p, const size_t np, Inst** i, const size_t ni)
+            : name(n), global(g), params(p), n_params(np), insts(i), n_insts(ni) {}
     };
 
     /**
-     * TAC function call node.
+     * TAC node for a variable with static storage duration.
      */
-    class Function_call {
-    public:
-        std::string name; ///< name of the function to be called
-        std::vector<Value_ptr> args; ///< arguments to be passed to the function
-        Value_ptr dst; ///< destination where return value of the function will be save to
+    struct Static_variable {
+        std::string_view name; ///< name of the static variable
+        bool global;           ///< indicates whether the variable is global
+        int init;              ///< initial value of the variable
+
+        Static_variable(const std::string_view n, const bool g, const int i) : name(n), global(g), init(i) {}
+    };
+
+    /**
+     * A TAC top level construct, either a function or a variable with static storage duration.
+     */
+    struct Top_level {
+        enum class Kind {Function, Static_variable} kind; ///< kind of top level construct
+        union {
+            Function* func;            ///< pointer to actual item
+            Static_variable* stat_var; ///< pointer to actual item
+        };
+        explicit Top_level(Function* f) : kind(Kind::Function), func(f) {}
+        explicit Top_level(Static_variable* sv) : kind(Kind::Static_variable), stat_var(sv) {}
+    };
+
+    /**
+     * The root node of the TAC tree, representing the whole translation unit.
+     */
+    struct Program {
+        Top_level* top_level_constructs; ///< arena allocated array of top level constructs
+        size_t n_top_level_constructs;   ///< number of top level constructs
+        Program(Top_level* tl, const size_t ntl) : top_level_constructs(tl), n_top_level_constructs(ntl) {}
+
+        /**
+         * Constructs and returns a span over all top-level constructs for e.g. a range based for loop.
+         * @return std::spawn over top level constructs
+         */
+        [[nodiscard]] std::span<Top_level const> top_level() const { return std::span(top_level_constructs, n_top_level_constructs); }
     };
 }
 

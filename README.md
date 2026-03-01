@@ -71,3 +71,9 @@ CI runs tests in:
 
 `mantis` is under active development.
 The focus is correctness, clean architecture, and well-tested compiler infrastructure.
+So far only integers are implemented.
+
+---
+
+## Documentation
+The API documentation can be build by `make doc` from within the build directory. Additionally, the documentation of the main branch can always be found at https://kekkbringer.github.io/mantis. 
