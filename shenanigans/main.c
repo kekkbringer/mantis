@@ -1,0 +1,7 @@
+int kek(int a) {
+    return 1;
+}
+
+int main() {
+    return 127;
+}

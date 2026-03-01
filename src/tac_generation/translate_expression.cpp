@@ -10,6 +10,8 @@
 tac::Value Tac_generator::translate_expression(const ast::Expr* expr, std::vector<tac::Instruction_ptr> &insts) {
     tac::Value dst;
 
+    if (expr == nullptr) return dst;
+
     switch (expr->kind) {
         case ast::Expr::Kind::Constant: {
             const auto* con = cast<const ast::Constant>(expr);

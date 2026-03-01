@@ -122,7 +122,7 @@ ast::Expr* Parser::parse_expression(const int min_prec) {
                 }
                 ast::Variable* var_copy;
                 if (lhs->kind == ast::Expr::Kind::Variable) {
-                    const auto vdecl = cast<ast::Variable const>(var_copy);
+                    const auto vdecl = cast<ast::Variable const>(lhs);
                     var_copy = arena->allocate<ast::Variable>(vdecl->name, Source_location());
                 }
                 rhs = arena->allocate<ast::Binary>(ast_op, var_copy, rhs, Source_location());

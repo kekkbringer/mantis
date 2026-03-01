@@ -200,7 +200,8 @@ ast::Stmt* Parser::parse_statement_inner() {
                 }
                 current_switch_cases.back().insert(val);
             }
-            return arena->allocate<ast::Switch_label>(val, stmt, ".case." + std::to_string(val) + "." + tag, loc);
+            const auto tag_view = string_table->intern(".case." + std::to_string(val) + "." + tag);
+            return arena->allocate<ast::Switch_label>(val, stmt, tag_view, loc);
         }
 
         // default label
@@ -222,7 +223,8 @@ ast::Stmt* Parser::parse_statement_inner() {
                     diag.report_issue(Severity::Error, current, Error_kind::Duplicate_default, "");
                 current_switch_has_default.back() = true;
             }
-            return arena->allocate<ast::Switch_label>(stmt, ".default." + tag, loc);
+            const auto tag_view = string_table->intern(".default." + tag);
+            return arena->allocate<ast::Switch_label>(stmt, tag_view, loc);
         }
 
         // switch statement
@@ -250,7 +252,8 @@ ast::Stmt* Parser::parse_statement_inner() {
 
             int* cases = arena->allocate_array<int>(n_case);
             std::ranges::copy(current_switch_cases.back(), cases);
-            auto switch_ptr = arena->allocate<ast::Switch>(has_def, cases, n_case, expr, stmt, tag, loc);
+            const auto tag_view = string_table->intern(tag);
+            auto switch_ptr = arena->allocate<ast::Switch>(has_def, cases, n_case, expr, stmt, tag_view, loc);
 
             current_switch_cases.pop_back();
             current_switch_has_default.pop_back();
@@ -281,7 +284,8 @@ ast::Stmt* Parser::parse_statement_inner() {
             expect(Token_type::Close_parenthesis, Error_kind::Missing_closing_parenthesis, "after statement in do-while loop");
             expect(Token_type::Semicolon, Error_kind::Missing_semicolon, "at end of do-while loop");
 
-            return arena->allocate<ast::Do_while>(cond, stmt, tag, loc);
+            const auto tag_view = string_table->intern(tag);
+            return arena->allocate<ast::Do_while>(cond, stmt, tag_view, loc);
         }
 
         // while loop
@@ -301,7 +305,8 @@ ast::Stmt* Parser::parse_statement_inner() {
             // pop it from the control target stack
             control_stack.pop_back();
 
-            return arena->allocate<ast::While>(cond, stmt, tag, loc);
+            const auto tag_view = string_table->intern(tag);
+            return arena->allocate<ast::While>(cond, stmt, tag_view, loc);
         }
 
         // for loop
@@ -372,7 +377,8 @@ ast::Stmt* Parser::parse_statement_inner() {
             leave_scope();
             control_stack.pop_back();
 
-            return arena->allocate<ast::For>(init, cond, post, stmt, tag, loc);
+            const auto tag_view = string_table->intern(tag);
+            return arena->allocate<ast::For>(init, cond, post, stmt, tag_view, loc);
         }
 
         // continue statement
@@ -385,7 +391,8 @@ ast::Stmt* Parser::parse_statement_inner() {
             }
             if (tag.empty()) diag.report_issue(Severity::Error, current, Error_kind::Continue_outside_loop);
             expect(Token_type::Semicolon, Error_kind::Missing_semicolon, "after continue statement");
-            return arena->allocate<ast::Continue>(tag, loc);
+            const auto tag_view = string_table->intern(tag);
+            return arena->allocate<ast::Continue>(tag_view, loc);
         }
 
         // break statement
@@ -395,7 +402,8 @@ ast::Stmt* Parser::parse_statement_inner() {
             const std::string tag = (control_stack.empty() ? "" : control_stack.back().tag);
             if (tag.empty()) diag.report_issue(Severity::Error, current, Error_kind::Break_outside_control_target);
             expect(Token_type::Semicolon, Error_kind::Missing_semicolon, "after break statement");
-            return arena->allocate<ast::Break>(tag, loc);
+            const auto tag_view = string_table->intern(tag);
+            return arena->allocate<ast::Break>(tag_view, loc);
         }
 
         // block statement
@@ -450,7 +458,8 @@ ast::Stmt* Parser::parse_statement_inner() {
             expect(Token_type::Identifier, Error_kind::Missing_label, "after goto");
             expect(Token_type::Semicolon, Error_kind::Missing_semicolon, "at end of goto statement");
 
-            return arena->allocate<ast::Goto>(ast::Goto(label, loc));
+            const auto label_view = string_table->intern(label);
+            return arena->allocate<ast::Goto>(ast::Goto(label_view, loc));
         }
 
         // labeled statement
@@ -484,7 +493,8 @@ ast::Stmt* Parser::parse_statement_inner() {
                 scan(); // colon
 
                 auto stmt = parse_statement();
-                return arena->allocate<ast::Labeled>(label, stmt, loc);
+                const auto label_view = string_table->intern(label);
+                return arena->allocate<ast::Labeled>(label_view, stmt, loc);
             }
             // if not a labeled statement, it's an expression statement, so just fallthrough to default case
         }

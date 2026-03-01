@@ -22,7 +22,7 @@ void Tac_generator::translate_block_item(const ast::Block_item* bitem, std::vect
                 // translation still needs to be skipped if it has static storage duration
                 if (var_decl->storage_class != ast::Decl::Storage_class::Static) {
                     auto init_val = translate_expression(var_decl->init, insts);
-                    insts.emplace_back(std::make_unique<tac::Copy>(tac::Copy(init_val, tac::Variable(std::string(var_decl->name)))));
+                    insts.emplace_back(std::make_unique<tac::Copy>(tac::Copy(init_val, tac::Variable(var_decl->name.data()))));
                 }
             }
         }

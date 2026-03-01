@@ -241,6 +241,17 @@ public:
     }
 
     bool is_global_scope() const { return (parent == nullptr); }
+
+    void print_table() {
+        std::cout << "\n=== SCOPE ===\n";
+        std::cout << "global: " << (parent==nullptr ? "yes" : "no") << "\n";
+        std::cout << "number of children: " << children.size() << "\n";
+        std::cout << "number of symbols in table: " << symbols.size() << "\n";
+        std::cout << "names in the scope:\n";
+        for (const auto& [name, sym]: symbols) std::cout << "\t" << name << "\n";
+
+        for (const auto& child: children) child->print_table();
+    }
 };
 
 /**

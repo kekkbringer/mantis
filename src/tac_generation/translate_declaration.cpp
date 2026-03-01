@@ -12,7 +12,6 @@
 tac::Function Tac_generator::translate_function_decl(const ast::Func_decl* fdecl) {
     const auto name = fdecl->name;
 
-
     // fill function body by translating each block item on its own
     std::vector<tac::Instruction_ptr> body;
     if (fdecl->body != nullptr)
@@ -26,6 +25,7 @@ tac::Function Tac_generator::translate_function_decl(const ast::Func_decl* fdecl
 
     std::vector<std::string> tac_params;
     for (const auto& param: fdecl->parameters()) {
+        std::cout << "HALLO: " << param->name.data() << std::endl;
         tac_params.emplace_back(param->name);
     }
 

@@ -49,6 +49,7 @@ ast::Expr* Parser::parse_factor() {
     } else if (la_type == Token_type::Identifier) {
         scan();
         const std::string name = current.val;
+        const auto name_view = string_table->intern(name);
 
 
         // function call
@@ -72,7 +73,7 @@ ast::Expr* Parser::parse_factor() {
             // argument list empty
             if (la_type == Token_type::Close_parenthesis) {
                 scan();
-                factor = arena->allocate<ast::Function_call>(name, nullptr, 0, loc);
+                factor = arena->allocate<ast::Function_call>(name_view, nullptr, 0, loc);
             // non-empty argument list
             } else {
                 auto arglist = parse_argument_list();
@@ -95,13 +96,13 @@ ast::Expr* Parser::parse_factor() {
                 // copy args into arena and construct function call node
                 ast::Expr** args = arena->allocate_array<ast::Expr*>(arglist.size());
                 std::ranges::copy(arglist, args);
-                factor = arena->allocate<ast::Function_call>(name, args, arglist.size(), loc);
+                factor = arena->allocate<ast::Function_call>(name_view, args, arglist.size(), loc);
             }
 
 
         // variable
         } else {
-            auto iden = arena->allocate<ast::Variable>(name, loc);
+            auto iden = arena->allocate<ast::Variable>(name_view, loc);
 
             // check if variable is declared
             const auto symbol = current_scope->lookup(iden->name.data());

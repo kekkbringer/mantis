@@ -27,16 +27,14 @@ void Parser::synchronize_declaration() {
 
         // check for initial tokens of declarations
         switch (current.type) {
-        case Token_type::int_:
-            in_error_recovery = false;
-            return;
-
-        case Token_type::Close_brace:
-            // might be a special case because you could get to the file scope here
-            in_error_recovery = false;
-            return;
-
-        default:;
+            case Token_type::int_:
+                in_error_recovery = false;
+                return;
+            case Token_type::Close_brace:
+                // might be a special case because you could get to the file scope here
+                in_error_recovery = false;
+                return;
+            default:;
         }
 
         // token was not safe, continue looking
@@ -149,6 +147,9 @@ ast::Decl* Parser::parse_declaration_inner() {
         }
     }
 
+    // intern string
+    const auto name_view = string_table->intern(name);
+
 
     // <variable-declaration> ::= { <specifier> }+ <identifier> [ "=" <exp> ] ";"
     // <function-declaration> ::= { <specifier> }+ <identifier> "(" <param-list> ")" ( <block> | ";" )
@@ -177,7 +178,7 @@ ast::Decl* Parser::parse_declaration_inner() {
         std::ranges::copy(param_list, params);
 
         // construct function declaration node
-        auto* func_decl = arena->allocate<ast::Func_decl>(name,sc, params, param_list.size(), nullptr, loc);
+        auto* func_decl = arena->allocate<ast::Func_decl>(name_view,sc, params, param_list.size(), nullptr, loc);
         func_decl->loc = loc;
 
         // construct symbol
@@ -301,7 +302,7 @@ ast::Decl* Parser::parse_declaration_inner() {
     // variable
     } else if (la_type == Token_type::Semicolon or la_type == Token_type::Assign) {
         // prepare return
-        auto* var_decl_ptr = arena->allocate<ast::Var_decl>(name, sc, nullptr, loc);
+        auto* var_decl_ptr = arena->allocate<ast::Var_decl>(name_view, sc, nullptr, loc);
 
         // create general part of the symbol
         Symbol sym;
@@ -490,7 +491,8 @@ ast::Decl* Parser::parse_declaration_inner() {
         }
 
         // use (potentially) mangled name in AST and return
-        var_decl_ptr->name = sym.unique_name;
+        const auto unique_name_view = string_table->intern(sym.unique_name);
+        var_decl_ptr->name = unique_name_view;
         var_decl_ptr->loc = loc;
         return var_decl_ptr;
 
@@ -498,6 +500,6 @@ ast::Decl* Parser::parse_declaration_inner() {
         report_syntax_error(Severity::Error, look_ahead, Error_kind::Missing_declaration, "");
     }
 
-    auto* func_decl = arena->allocate<ast::Func_decl>(name,sc, nullptr, 0, nullptr, loc);
+    auto* func_decl = arena->allocate<ast::Func_decl>(name_view,sc, nullptr, 0, nullptr, loc);
     return func_decl;
 }

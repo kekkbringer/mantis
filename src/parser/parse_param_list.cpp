@@ -22,8 +22,9 @@ std::vector<ast::Var_decl*> Parser::parse_param_list(std::vector<std::shared_ptr
         scan();
         expect(Token_type::Identifier, Error_kind::Missing_identifier, "after 'int' in parameter list");
 
-        auto name = current.val;
-        auto var_decl_ptr = arena->allocate<ast::Var_decl>(name, ast::Decl::Storage_class::None, nullptr, loc);
+        const auto name = current.val;
+        const auto name_view = string_table->intern(name);
+        auto var_decl_ptr = arena->allocate<ast::Var_decl>(name_view, ast::Decl::Storage_class::None, nullptr, loc);
 
         // construct symbol
         Symbol sym;
@@ -39,7 +40,8 @@ std::vector<ast::Var_decl*> Parser::parse_param_list(std::vector<std::shared_ptr
         }
 
         // use mangled name in AST and return
-        var_decl_ptr->name = sym.unique_name;
+        const auto unique_name_view = string_table->intern(sym.unique_name);
+        var_decl_ptr->name = unique_name_view;
         var_decl_ptr->loc = current.location;
 
         param_list.push_back(var_decl_ptr);
@@ -53,7 +55,8 @@ std::vector<ast::Var_decl*> Parser::parse_param_list(std::vector<std::shared_ptr
             expect(Token_type::Identifier, Error_kind::Missing_identifier, "after 'int' in parameter list");
 
             auto name = current.val;
-            auto var_decl_ptr = arena->allocate<ast::Var_decl>(name, ast::Decl::Storage_class::None, nullptr, loc);
+            auto name_view = string_table->intern(name);
+            auto var_decl_ptr = arena->allocate<ast::Var_decl>(name_view, ast::Decl::Storage_class::None, nullptr, loc);
 
             // construct symbol
             Symbol sym;
@@ -69,7 +72,8 @@ std::vector<ast::Var_decl*> Parser::parse_param_list(std::vector<std::shared_ptr
             }
 
             // use mangled name in AST and return
-            var_decl_ptr->name = sym.unique_name;
+            const auto unique_name_view = string_table->intern(sym.unique_name);
+            var_decl_ptr->name = unique_name_view;
             var_decl_ptr->loc = current.location;
 
             param_list.push_back(var_decl_ptr);

@@ -164,6 +164,11 @@ void Tac_generator::translate_statement(const ast::Stmt* stmt, std::vector<tac::
             break;
         }
 
+        case ast::Stmt::Kind::Expr: {
+            const auto* expr_stmt = cast<ast::Expr_stmt const>(stmt);
+            translate_expression(expr_stmt->expr, insts);
+        }
+
         case ast::Stmt::Kind::Error: {
             break;
         }

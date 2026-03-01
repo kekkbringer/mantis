@@ -46,7 +46,7 @@ Compile a C file:
  mantis input.c
  ```
 
-This produces a natic executable from the given C source file. As mentioned above, a working GCC installation must be present and found in the $PATH, so that `mantis` can use the required GCC utilities.
+This produces a native executable from the given C source file. As mentioned above, a working GCC installation must be present and found in the $PATH, so that `mantis` can use the required GCC utilities.
 
 ---
 
