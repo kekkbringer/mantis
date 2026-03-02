@@ -13,26 +13,19 @@
  * @param vp TAC value to be translated
  * @return assembly operand
  */
-assem::Operand Asm_generator::translate_value(const tac::Value_ptr& vp) {
+assem::Operand Asm_generator::translate_value(const tac::Value& vp) {
     assem::Operand operand;
 
-    std::visit([&]<class T0>(T0&& arg){
-        using T = std::decay_t<T0>;
+    if (vp.kind == tac::Value::Kind::Int_constant) {
+        operand = assem::Immediate_value(vp.int_val);
 
-        // constant -> immediate value
-        if constexpr (std::is_same_v<T, tac::Constant>) {
-            operand = assem::Immediate_value(arg.val);
+    } else if (vp.kind == tac::Value::Kind::Variable) {
+        operand = assem::Pseudo(vp.name.data());
 
-        // variable -> pseudo register
-        } else if constexpr (std::is_same_v<T, tac::Variable>) {
-            operand = assem::Pseudo(arg.name);
-
-        } else if constexpr (std::is_same_v<T, std::monostate>) {
-        // unexpected/impossible branch
-        } else {
-            assert(false && "internal error in translate_value");
-        }
-    }, *vp);
+    } else {
+        assert(false && "internal error in translate_value");
+        std::unreachable();
+    }
 
     return operand;
 }

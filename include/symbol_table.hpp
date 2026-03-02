@@ -17,7 +17,7 @@ struct Symbol {
     std::string name;
     std::string unique_name;
     std::shared_ptr<Type> type = nullptr;
-    ast::Decl_view decl;
+    ast::Decl* decl;
     enum class Linkage {None, Internal, External} linkage = Linkage::None;
     enum class Storage_duration {Automatic, Static} storage_duration = Storage_duration::Automatic;
     enum class Init {Tentative, Initial, None} init;
@@ -241,22 +241,24 @@ public:
     }
 
     bool is_global_scope() const { return (parent == nullptr); }
+
+    void print_table() {
+        std::cout << "\n=== SCOPE ===\n";
+        std::cout << "global: " << (parent==nullptr ? "yes" : "no") << "\n";
+        std::cout << "number of children: " << children.size() << "\n";
+        std::cout << "number of symbols in table: " << symbols.size() << "\n";
+        std::cout << "names in the scope:\n";
+        for (const auto& [name, sym]: symbols) std::cout << "\t" << name << "\n";
+
+        for (const auto& child: children) child->print_table();
+    }
 };
 
 /**
- * @brief Checks for the type of the declaration that's saved in the symbol and returns the appropriate location.
+ * @brief Returns the location in the source code of the symbol in question.
  */
 inline Source_location get_location(const Symbol* sym) {
-    return std::visit([&]<class T0>(T0&& arg) -> Source_location {
-        using T = std::decay_t<T0>;
-        if constexpr (std::is_same_v<T, ast::Variable_declaration*> ||
-                      std::is_same_v<T, ast::Function_declaration*>) {
-            return arg->loc;
-        } else {
-            assert(false && "else branch in get_location");
-            return {};
-        }
-    }, sym->decl);
+    return sym->decl->loc;
 }
 
 #endif //SYMBOL_TABLE_HPP

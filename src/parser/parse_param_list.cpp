@@ -4,15 +4,15 @@
 
 #include "parser.hpp"
 
-Source_location get_location(const Symbol* sym);
-
 /**
  * Function to parse a parameter list with the following syntax in EBNF:
  * <param-list> ::= "" | "void" | "int" <identifier> { "," "int" <identifier> }
  * @return std::vector of parameter as strings
  */
-std::vector<ast::Variable_declaration_ptr> Parser::parse_param_list(std::vector<std::shared_ptr<Type>>& type_list) {
-    std::vector<ast::Variable_declaration_ptr> param_list;
+std::vector<ast::Var_decl*> Parser::parse_param_list(std::vector<std::shared_ptr<Type>>& type_list) {
+    std::vector<ast::Var_decl*> param_list;
+
+    const auto loc = current.location;
 
     // only void
     if (la_type == Token_type::void_) { scan(); return param_list; }
@@ -22,27 +22,29 @@ std::vector<ast::Variable_declaration_ptr> Parser::parse_param_list(std::vector<
         scan();
         expect(Token_type::Identifier, Error_kind::Missing_identifier, "after 'int' in parameter list");
 
-        auto name = current.val;
-        auto var_decl_ptr = std::make_unique<ast::Variable_declaration>(name, ast::Storage_class::None);
+        const auto name = current.val;
+        const auto name_view = string_table->intern(name);
+        auto var_decl_ptr = arena->allocate<ast::Var_decl>(name_view, ast::Decl::Storage_class::None, nullptr, loc);
 
         // construct symbol
         Symbol sym;
         sym.name = var_decl_ptr->name;
-        sym.decl = var_decl_ptr.get();
+        sym.decl = var_decl_ptr;
         sym.kind = Symbol::Kind::Var;
 
         // declare variable in current scope (automatically check for duplicate declaration)
         if (not current_scope->declare(sym, mangle_counter)) {
             std::string msg = "with name " + sym.name;
             diag.report_issue(Severity::Error, current, Error_kind::Duplicate_variable_decl, msg);
-            diag.report_issue(Severity::Note, get_location(current_scope->lookup(name)), Error_kind::First_defined_here, "");
+            diag.report_issue(Severity::Note, get_location(current_scope->lookup(std::string(name))), Error_kind::First_defined_here, "");
         }
 
         // use mangled name in AST and return
-        var_decl_ptr->name = sym.unique_name;
+        const auto unique_name_view = string_table->intern(sym.unique_name);
+        var_decl_ptr->name = unique_name_view;
         var_decl_ptr->loc = current.location;
 
-        param_list.push_back(std::move(var_decl_ptr));
+        param_list.push_back(var_decl_ptr);
         type_list.push_back(type_pool.type_int);
 
 
@@ -53,12 +55,13 @@ std::vector<ast::Variable_declaration_ptr> Parser::parse_param_list(std::vector<
             expect(Token_type::Identifier, Error_kind::Missing_identifier, "after 'int' in parameter list");
 
             auto name = current.val;
-            auto var_decl_ptr = std::make_unique<ast::Variable_declaration>(name, ast::Storage_class::None);
+            auto name_view = string_table->intern(name);
+            auto var_decl_ptr = arena->allocate<ast::Var_decl>(name_view, ast::Decl::Storage_class::None, nullptr, loc);
 
             // construct symbol
             Symbol sym;
             sym.name = var_decl_ptr->name;
-            sym.decl = var_decl_ptr.get();
+            sym.decl = var_decl_ptr;
             sym.kind = Symbol::Kind::Var;
 
             // declare variable in current scope (automatically check for duplicate declaration)
@@ -69,10 +72,11 @@ std::vector<ast::Variable_declaration_ptr> Parser::parse_param_list(std::vector<
             }
 
             // use mangled name in AST and return
-            var_decl_ptr->name = sym.unique_name;
+            const auto unique_name_view = string_table->intern(sym.unique_name);
+            var_decl_ptr->name = unique_name_view;
             var_decl_ptr->loc = current.location;
 
-            param_list.push_back(std::move(var_decl_ptr));
+            param_list.push_back(var_decl_ptr);
             type_list.push_back(type_pool.type_int);
         }
 

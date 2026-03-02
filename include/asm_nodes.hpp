@@ -60,7 +60,7 @@ namespace assem {
      */
     class Pseudo {
     public:
-        std::string name; ///< Name of the pseudo register
+        std::string_view name; ///< Name of the pseudo register
     };
 
     /**
@@ -76,7 +76,7 @@ namespace assem {
      */
     class Data {
     public:
-        std::string name;
+        std::string_view name;
     };
 
     /**
@@ -160,7 +160,7 @@ namespace assem {
      */
     class Jmp {
     public:
-        std::string name; ///< name of the label to jump to.
+        std::string_view name; ///< name of the label to jump to.
     };
 
     /**
@@ -170,9 +170,9 @@ namespace assem {
     class JmpCC {
     public:
         Cond_code cc;     ///< condition code to dictate when to take the jump
-        std::string name; ///< name of the label to jump to.
+        std::string_view name; ///< name of the label to jump to.
 
-        JmpCC(const Cond_code cc, std::string name) : cc(cc), name(std::move(name)) {};
+        JmpCC(const Cond_code cc, const std::string_view name) : cc(cc), name(name) {};
     };
 
     /**
@@ -190,7 +190,7 @@ namespace assem {
      */
     class Label {
     public:
-        std::string name; ///< name of the label
+        std::string_view name; ///< name of the label
     };
 
     /**
@@ -223,7 +223,7 @@ namespace assem {
      */
     class Call {
     public:
-        std::string name; ///< Name of the function to call
+        std::string_view name; ///< Name of the function to call
     };
 
     /**
@@ -244,7 +244,7 @@ namespace assem {
      */
     class Function {
     public:
-        std::string name;               ///< name of the function
+        std::string_view name;               ///< name of the function
         bool global;                    ///< indicates whether the function has global scoping
         std::vector<Instruction> insts; ///< list of assembly instructions that represent the function body
     };
@@ -254,7 +254,7 @@ namespace assem {
      */
     class Static_variable {
     public:
-        std::string name; ///< name of the static variable
+        std::string_view name; ///< name of the static variable
         bool global;      ///< indicates whether the static variable has global scoping
         int init;         ///< initial value of the static variable
     };

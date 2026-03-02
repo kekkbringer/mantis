@@ -7,6 +7,8 @@
 #include "source_manager.hpp"
 #include "lexer.hpp"
 #include "symbol_table.hpp"
+#include "string_table.hpp"
+#include "arena_allocator.hpp"
 
 /**
  * The Parser class is initialized with a source manager that keeps the whole source code as a string, the manager is
@@ -29,6 +31,8 @@ private:
     size_t mangle_counter = 0;      ///< for unique variable names
     Type_pool type_pool;            ///< allocator for different types
     std::string current_func;       ///< name of the functions that is currently parsed
+    StringTable* string_table;      ///< string table to intern all identifier
+    ArenaAllocator* arena;          ///< arena allocator for AST nodes
 
     struct Label_info {
         bool defined;
@@ -123,18 +127,18 @@ private:
     }
 
     // methods to parse each syntax construct
-    ast::Program parse_program();
-    ast::Expression_ptr parse_expression(int min_prec);
-    ast::Expression_ptr parse_factor();
-    std::vector<ast::Variable_declaration_ptr> parse_param_list(std::vector<std::shared_ptr<Type>>& type_list);
-    ast::Block parse_block(bool new_scope);
-    ast::Statement_ptr parse_statement();
-    ast::Statement_ptr parse_statement_inner();
+    ast::Program* parse_program();
+    ast::Expr* parse_expression(int min_prec);
+    ast::Expr* parse_factor();
+    std::vector<ast::Var_decl*> parse_param_list(std::vector<std::shared_ptr<Type>>& type_list);
+    ast::Block* parse_block(bool new_scope);
+    ast::Stmt* parse_statement();
+    ast::Stmt* parse_statement_inner();
     ast::For_init parse_for_init();
-    std::vector<ast::Expression_ptr> parse_argument_list();
+    std::vector<ast::Expr*> parse_argument_list();
     void synchronize_stmt();
-    ast::Declaration_ptr parse_declaration();
-    ast::Declaration_ptr parse_declaration_inner();
+    ast::Decl* parse_declaration();
+    ast::Decl* parse_declaration_inner();
     void synchronize_declaration();
 
     /**
@@ -181,17 +185,20 @@ public:
      * @param sm source manager that keeps the source code
      * @param de diagnostics engine to report notes, warnings and errors
      * @param fs pointer to the global/file scope
+     * @param st string table to intern all strings
+     * @param aa arena allocator for AST nods
      */
-    explicit Parser(Source_manager& sm, Diagnostics_engine& de, Scope* fs)
+    explicit Parser(Source_manager& sm, Diagnostics_engine& de, Scope* fs, StringTable* st, ArenaAllocator* aa)
         : error_dist(100), error_count(0), in_error_recovery(false), la_type(Token_type::None),
-          source_manager(sm), diag(de), lexer(source_manager, de), current_scope(fs) {
+          source_manager(sm), diag(de), lexer(source_manager, de), string_table(st), arena(aa),
+          current_scope(fs) {
         scan();
     }
 
     /**
      * The main parser routine, this will start to parse a C program.
      */
-    ast::Program parse();
+    ast::Program* parse();
 
     /**
      * Debug routine that prints the whole AST to std::cout

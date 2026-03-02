@@ -25,7 +25,7 @@ void Asm_generator::preg_to_stack(assem::Operand& op, std::unordered_map<std::st
         if constexpr (std::is_same_v<T, assem::Pseudo>) {
             // try to find pseudo register in map
             // found in map -> just replace
-            if (auto search = map.find(arg.name); search != map.end()) {
+            if (auto search = map.find(arg.name.data()); search != map.end()) {
                 op = assem::Stack(search->second);
 
             // not found in map -> loop up in symbol table
@@ -33,15 +33,14 @@ void Asm_generator::preg_to_stack(assem::Operand& op, std::unordered_map<std::st
             // if static -> translate to 'Data'
             } else {
                 // look up in symbol table
-                const Symbol* sym = file_scope->find_global(demangle(arg.name), arg.name);
-                //const Symbol* sym = file_scope->find_global(arg.name);
+                const Symbol* sym = file_scope->find_global(demangle(arg.name.data()), arg.name.data());
                 //if (sym != nullptr and (sym->linkage == Symbol::Linkage::Internal or sym->linkage == Symbol::Linkage::External)) {
                 if (sym != nullptr and sym->storage_duration == Symbol::Storage_duration::Static) {
-                    op = assem::Data(arg.name);
+                    op = assem::Data(arg.name.data());
 
                 } else {
                     stack_top -= 4;
-                    map[arg.name] = stack_top;
+                    map[arg.name.data()] = stack_top;
                     op = assem::Stack(stack_top);
                 }
             }

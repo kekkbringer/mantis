@@ -12,7 +12,7 @@
  * @param ainsts list of assembly instructions
  * @param up TAC unary instruction to be translated.
  */
-void Asm_generator::translate_unary(std::vector<assem::Instruction>& ainsts, const tac::Unary_ptr& up) {
+void Asm_generator::translate_unary(std::vector<assem::Instruction>& ainsts, const tac::Unary* up) {
     const auto src = translate_value(up->src);
     const auto dst = translate_value(up->dst);
 

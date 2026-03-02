@@ -3,25 +3,29 @@
 //
 
 #include "tac_generator.hpp"
-#include <iostream>
+#include "util.hpp"
 
-void Tac_generator::traverse_scope(Scope* scope, tac::Program& tac_prog) {
+void Tac_generator::traverse_scope(Scope* scope, std::vector<tac::Top_level>& tac_tl) {
     if (scope == nullptr) return;
 
     // loop over all symbols
     for (const auto& [name, sym]: scope->symbols) {
         if (sym.kind == Symbol::Kind::Var) {
-            const auto& var_decl = std::get<ast::Variable_declaration*>(sym.decl);
+            const auto* var_decl = cast<ast::Var_decl const>(sym.decl);
             if (sym.storage_duration == Symbol::Storage_duration::Static) {
                 // actual initialization
                 if (sym.init == Symbol::Init::Initial) {
                     // determine value of initial value
-                    const auto& constant = std::get<ast::Constant_ptr>(var_decl->init);
-                    tac_prog.emplace_back(std::make_unique<tac::Static_variable>(sym.unique_name, sym.linkage == Symbol::Linkage::External, constant->val));
+                    const auto* constant = cast<ast::Constant const>(var_decl->init);
+                    const auto unique_name_view = string_table->intern(sym.unique_name);
+                    auto* ptr = arena->allocate<tac::Static_variable>(unique_name_view, sym.linkage == Symbol::Linkage::External, constant->val);
+                    tac_tl.emplace_back(ptr);
 
                 // tentative init
                 } else if (sym.init == Symbol::Init::Tentative) {
-                    tac_prog.emplace_back(std::make_unique<tac::Static_variable>(sym.unique_name, sym.linkage == Symbol::Linkage::External, 0));
+                    const auto unique_name_view = string_table->intern(sym.unique_name);
+                    auto* ptr = arena->allocate<tac::Static_variable>(sym.unique_name, sym.linkage == Symbol::Linkage::External, 0);
+                    tac_tl.emplace_back(ptr);
                 }
             }
         }
@@ -29,6 +33,6 @@ void Tac_generator::traverse_scope(Scope* scope, tac::Program& tac_prog) {
 
     // visit all children
     for (const auto& child: scope->children) {
-        traverse_scope(child.get(), tac_prog);
+        traverse_scope(child.get(), tac_tl);
     }
 }

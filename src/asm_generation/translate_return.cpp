@@ -10,7 +10,7 @@
  * @param ainsts list of assembly instructions
  * @param rp TAC return instruction to be translated.
  */
-void Asm_generator::translate_return(std::vector<assem::Instruction>& ainsts, const tac::Return_ptr& rp) {
+void Asm_generator::translate_return(std::vector<assem::Instruction>& ainsts, const tac::Return* rp) {
     // get return value and move it to AX first
     const auto src = translate_value(rp->val);
     ainsts.emplace_back(assem::Mov(src, assem::Register(assem::Reg::AX)));

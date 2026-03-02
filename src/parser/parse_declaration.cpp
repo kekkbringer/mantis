@@ -27,16 +27,14 @@ void Parser::synchronize_declaration() {
 
         // check for initial tokens of declarations
         switch (current.type) {
-        case Token_type::int_:
-            in_error_recovery = false;
-            return;
-
-        case Token_type::Close_brace:
-            // might be a special case because you could get to the file scope here
-            in_error_recovery = false;
-            return;
-
-        default:;
+            case Token_type::int_:
+                in_error_recovery = false;
+                return;
+            case Token_type::Close_brace:
+                // might be a special case because you could get to the file scope here
+                in_error_recovery = false;
+                return;
+            default:;
         }
 
         // token was not safe, continue looking
@@ -54,20 +52,20 @@ void Parser::synchronize_declaration() {
  * return a pointer to an ErrorDecl node ourselves.
  * @return
  */
-ast::Declaration_ptr Parser::parse_declaration() {
+ast::Decl* Parser::parse_declaration() {
     // if we are already in error recovery mode -> synchronize
     if (in_error_recovery) {
         synchronize_declaration();
-        return ast::ErrorDecl_ptr();
+        return arena->allocate<ast::Error_decl>(Source_location());
     }
 
     // call actual parsing function
-    auto decl_ptr = parse_declaration_inner();
+    const auto decl_ptr = parse_declaration_inner();
 
     // check if catastrophic error was encountered
-    if (std::holds_alternative<ast::ErrorDecl_ptr>(decl_ptr)) {
+    if (decl_ptr->kind == ast::Decl::Kind::Error) {
         synchronize_declaration();
-        return ast::ErrorDecl_ptr();
+        return arena->allocate<ast::Error_decl>(Source_location());
     }
 
     return decl_ptr;
@@ -80,7 +78,7 @@ ast::Declaration_ptr Parser::parse_declaration() {
  * <function-declaration> ::= { <specifier> }+ <identifier> "(" <param-list> ")" ( <block> | ";" )
  * @return unique_ptr to a declaration node
  */
-ast::Declaration_ptr Parser::parse_declaration_inner() {
+ast::Decl* Parser::parse_declaration_inner() {
 
     // <declaration> ::= <variable-declaration> | <function-declaration>
     // <variable-declaration> ::= { <specifier> }+ <identifier> [ "=" <exp> ] ";"
@@ -90,7 +88,7 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
 
     // there must be at minimum one specifier, currently 'int' must always be present
     bool is_int = false;
-    auto sc = ast::Storage_class::None;
+    auto sc = ast::Decl::Storage_class::None;
     while (look_ahead.is_specifier()) {
         switch (la_type) {
             // data types
@@ -103,8 +101,8 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
 
             // storage classifier
             case Token_type::static_: {
-                if (sc == ast::Storage_class::None) {
-                    sc = ast::Storage_class::Static;
+                if (sc == ast::Decl::Storage_class::None) {
+                    sc = ast::Decl::Storage_class::Static;
                 } else {
                     diag.report_issue(Severity::Error, look_ahead, Error_kind::Conflicting_storage_class, "");
                 }
@@ -113,8 +111,8 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
             }
 
             case Token_type::extern_: {
-                if (sc == ast::Storage_class::None) {
-                    sc = ast::Storage_class::Extern;
+                if (sc == ast::Decl::Storage_class::None) {
+                    sc = ast::Decl::Storage_class::Extern;
                 } else {
                     diag.report_issue(Severity::Error, look_ahead, Error_kind::Conflicting_storage_class, "");
                 }
@@ -145,9 +143,12 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
             scan(); scan();
         } else {
             report_syntax_error(Severity::Error, look_ahead, Error_kind::Missing_identifier, "after specifier in declaration");
-            return ast::ErrorDecl_ptr();
+            return arena->allocate<ast::Error_decl>(loc);
         }
     }
+
+    // intern string
+    const auto name_view = string_table->intern(name);
 
 
     // <variable-declaration> ::= { <specifier> }+ <identifier> [ "=" <exp> ] ";"
@@ -160,7 +161,7 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
         // parse parameter list, which enters a new scope
         enter_new_scope();
         std::vector<std::shared_ptr<Type>> param_types;
-        auto param_list = parse_param_list(param_types);
+        std::vector<ast::Var_decl*> param_list = parse_param_list(param_types);
         if (la_type != Token_type::Close_parenthesis) {
             // just a stray token?
             if (lexer.peek(0).type == Token_type::Close_parenthesis) {
@@ -168,24 +169,29 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
                 scan(); scan();
             } else {
                 report_syntax_error(Severity::Error, look_ahead, Error_kind::Missing_closing_parenthesis, "after parameter list in function declaration");
-                return ast::ErrorDecl_ptr();
+                return arena->allocate<ast::Error_decl>(loc);
             }
         } else scan();
 
-        auto func_decl = std::make_unique<ast::Function_declaration>(name, param_list, sc);
+        // copy params into arena
+        auto** params = arena->allocate_array<ast::Var_decl*>(param_list.size());
+        std::ranges::copy(param_list, params);
+
+        // construct function declaration node
+        auto* func_decl = arena->allocate<ast::Func_decl>(name_view,sc, params, param_list.size(), nullptr, loc);
         func_decl->loc = loc;
 
         // construct symbol
         Symbol sym;
         sym.name = func_decl->name;
-        sym.decl = func_decl.get();
+        sym.decl = func_decl;
         sym.kind = Symbol::Kind::Func;
         sym.linkage = Symbol::Linkage::External;
         sym.type = type_pool.get_function(type_pool.type_int, param_types);
 
         // block scope 'static' function is not valid
         if (current_scope->parent->parent != nullptr) {
-            if (sc == ast::Storage_class::Static) {
+            if (sc == ast::Decl::Storage_class::Static) {
                 std::string msg = "of function " + sym.name;
                 diag.report_issue(Severity::Error, loc, Error_kind::Invalid_storage_class, msg);
             }
@@ -203,7 +209,7 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
                 }
 
                 // check if a static function declaration follows a non-static declaration
-                if (lookup_sym->linkage == Symbol::Linkage::External and sc == ast::Storage_class::Static) {
+                if (lookup_sym->linkage == Symbol::Linkage::External and sc == ast::Decl::Storage_class::Static) {
                     std::string msg = "with name " + sym.name + ". First defined non-static, now static.";
                     diag.report_issue(Severity::Error, loc, Error_kind::Incompatible_function_redeclaration, msg);
                     diag.report_issue(Severity::Note, get_location(lookup_sym), Error_kind::First_defined_here, "");
@@ -244,10 +250,13 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
         //definition, body is present, if and only if we encounter a open brace
         } else if (la_type == Token_type::Open_brace) {
             // check for function redefinition
-            if (upper_sym != nullptr and std::get<ast::Function_declaration*>(upper_sym->decl)->body != nullptr) {
-                std::string msg = "with name " + name;
-                diag.report_issue(Severity::Error, current, Error_kind::Redefinition_of_function, msg);
-                diag.report_issue(Severity::Note, get_location(upper_sym), Error_kind::First_defined_here, "");
+            if (upper_sym != nullptr) {
+                const auto* fdecl = cast<ast::Func_decl const>(upper_sym->decl);
+                if (fdecl->body != nullptr) {
+                    std::string msg = "with name " + name;
+                    diag.report_issue(Severity::Error, current, Error_kind::Redefinition_of_function, msg);
+                    diag.report_issue(Severity::Note, get_location(upper_sym), Error_kind::First_defined_here, "");
+                }
             }
 
             // test for nested function definitions and remember current function
@@ -264,7 +273,7 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
 
             // parse block without entering a new scope, the scope begins with the parameter list
             auto body = parse_block(false);
-            func_decl->body = std::make_unique<ast::Block>(std::move(body));
+            func_decl->body = body;
             func_decl->loc = loc;
 
             leave_scope();
@@ -293,12 +302,12 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
     // variable
     } else if (la_type == Token_type::Semicolon or la_type == Token_type::Assign) {
         // prepare return
-        auto var_decl_ptr = std::make_unique<ast::Variable_declaration>(name, sc);
+        auto* var_decl_ptr = arena->allocate<ast::Var_decl>(name_view, sc, nullptr, loc);
 
         // create general part of the symbol
         Symbol sym;
         sym.name = var_decl_ptr->name;
-        sym.decl = var_decl_ptr.get();
+        sym.decl = var_decl_ptr;
         sym.kind = Symbol::Kind::Var;
         sym.type = type_pool.type_int;
 
@@ -307,7 +316,7 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
 
         // check full/true init of variable, might be: None, Initial or Tentative
         if (has_init) sym.init = Symbol::Init::Initial;
-        else sym.init = (sc == ast::Storage_class::Extern ? Symbol::Init::None : Symbol::Init::Tentative);
+        else sym.init = (sc == ast::Decl::Storage_class::Extern ? Symbol::Init::None : Symbol::Init::Tentative);
 
         // distinguish between file scope or block scope
         const bool at_file_scope = current_scope->parent == nullptr;
@@ -316,7 +325,7 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
         if (at_file_scope) {
             sym.unique_name = sym.name;
             sym.storage_duration = Symbol::Storage_duration::Static;
-            sym.linkage = (sc == ast::Storage_class::Static) ? Symbol::Linkage::Internal : Symbol::Linkage::External;
+            sym.linkage = (sc == ast::Decl::Storage_class::Static) ? Symbol::Linkage::Internal : Symbol::Linkage::External;
 
             // warm about file scope 'extern' eith init
             if (has_init and sym.linkage == Symbol::Linkage::External)
@@ -325,15 +334,15 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
         // block scope linkage and storage duration
         } else {
             // 'static' block scope
-            if (sc == ast::Storage_class::Static) {
+            if (sc == ast::Decl::Storage_class::Static) {
                 sym.linkage = Symbol::Linkage::None;
                 sym.storage_duration = Symbol::Storage_duration::Static;
                 if (not has_init) {
                     sym.init = Symbol::Init::Initial;
-                    var_decl_ptr->init = std::make_unique<ast::Constant>(0);
+                    var_decl_ptr->init = arena->allocate<ast::Constant>(0, loc);
                 }
             // 'extern' block scope
-            } else if (sc == ast::Storage_class::Extern) {
+            } else if (sc == ast::Decl::Storage_class::Extern) {
                 sym.unique_name = sym.name; // resolves to file scope variable
                 sym.linkage = Symbol::Linkage::External;
                 sym.storage_duration = Symbol::Storage_duration::Static;
@@ -358,7 +367,7 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
                 // redeclaration must have the same linkage
                 // or this one must have the 'extern' keyword, in which case the previous linkage is adopted
                 if (prev.linkage != sym.linkage) {
-                    if (sc == ast::Storage_class::Extern) sym.linkage = prev.linkage;
+                    if (sc == ast::Decl::Storage_class::Extern) sym.linkage = prev.linkage;
                     else {
                         diag.report_issue(Severity::Error, loc, Error_kind::Conflicting_linkage);
                         diag.report_issue(Severity::Note, get_location(&prev), Error_kind::First_defined_here, "");
@@ -396,7 +405,7 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
         // block scope
         } else {
             // block scope 'extern'
-            if (sc == ast::Storage_class::Extern) {
+            if (sc == ast::Decl::Storage_class::Extern) {
                 // check if name is already known in the current scope with no linkage
                 const auto it = current_scope->symbols.find(sym.name);
                 if (it != current_scope->symbols.end()) {
@@ -424,7 +433,7 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
                 current_scope->declare(sym);
 
             // block scope 'static'
-            } else if (sc == ast::Storage_class::Static) {
+            } else if (sc == ast::Decl::Storage_class::Static) {
                 // check for redeclaration
                 if (current_scope->symbols.contains(sym.name)) {
                     const std::string msg = "with name " + sym.name;
@@ -434,9 +443,6 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
                 }
                 // declare while mangling name
                 current_scope->declare(sym, mangle_counter);
-
-                // also add mangled name to file scope so it is found later when replacing pseudo register
-                //current_scope->get_file_scope()->symbols[sym.unique_name] = sym;
 
             // block scope automatic storage duration variable
             } else {
@@ -457,7 +463,7 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
         if (has_init) {
             auto expr = parse_expression(0);
             // check for error in expression parsing
-            if (std::holds_alternative<ast::ErrorExpr_ptr>(expr)) return ast::ErrorDecl_ptr();
+            if (expr->kind == ast::Expr::Kind::Error) return arena->allocate<ast::Error_decl>(loc);
             if (la_type != Token_type::Semicolon) {
                 // check for stray token
                 if (lexer.peek(0).type == Token_type::Semicolon) {
@@ -465,27 +471,28 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
                     scan(); scan();
                 } else {
                     report_syntax_error(Severity::Error, look_ahead, Error_kind::Missing_semicolon,  "after variable initialization");
-                    return ast::ErrorDecl_ptr();
+                    return arena->allocate<ast::Error_decl>(loc);
                 }
             } else scan();
-            var_decl_ptr->init = std::move(expr);
+            var_decl_ptr->init = expr;
 
             // if file scope variable with initialization, check if init is a constant
             // (TODO: this should really be a constexpr)
             if (current_scope->parent == nullptr) {
-                if (not std::holds_alternative<ast::Constant_ptr>(var_decl_ptr->init))
+                if (var_decl_ptr->init->kind != ast::Expr::Kind::Constant)
                     diag.report_issue(Severity::Error, loc, Error_kind::Non_const_init, "of file scope variable");
 
             // a block scope 'static' variable also needs to have a const init
             // (TODO: this should really be a constexpr)
-            } else if (sc == ast::Storage_class::Static) {
-                if (not std::holds_alternative<ast::Constant_ptr>(var_decl_ptr->init))
+            } else if (sc == ast::Decl::Storage_class::Static) {
+                if (var_decl_ptr->init->kind != ast::Expr::Kind::Constant)
                     diag.report_issue(Severity::Error, loc, Error_kind::Non_const_init, "of 'static' block scope variable");
             }
         }
 
         // use (potentially) mangled name in AST and return
-        var_decl_ptr->name = sym.unique_name;
+        const auto unique_name_view = string_table->intern(sym.unique_name);
+        var_decl_ptr->name = unique_name_view;
         var_decl_ptr->loc = loc;
         return var_decl_ptr;
 
@@ -493,7 +500,6 @@ ast::Declaration_ptr Parser::parse_declaration_inner() {
         report_syntax_error(Severity::Error, look_ahead, Error_kind::Missing_declaration, "");
     }
 
-    auto func_decl = std::make_unique<ast::Function_declaration>(name, sc);
-    func_decl->loc = loc;
+    auto* func_decl = arena->allocate<ast::Func_decl>(name_view,sc, nullptr, 0, nullptr, loc);
     return func_decl;
 }
