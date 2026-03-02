@@ -7,6 +7,7 @@
 
 #include <cassert>
 #include <utility>
+#include <optional>
 
 #include "ast.hpp"
 #include "symbol_table.hpp"
