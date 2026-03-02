@@ -6,26 +6,26 @@
 
 #include <array>
 
-void Asm_generator::translate_function_call(const tac::Function_call_ptr& fun_call, std::vector<assem::Instruction>& ainsts) {
+void Asm_generator::translate_function_call(const tac::Function_call* fun_call, std::vector<assem::Instruction>& ainsts) {
     constexpr std::array arg_registers = {reg::DI, reg::SI, reg::DX, reg::CX, reg::R8, reg::R9};
 
     const auto& tac_args = fun_call->args;
 
     // adjust stack alignment
     int stack_padding = 0;
-    if (tac_args.size() > 6 and tac_args.size() % 2 == 1) stack_padding = 8;
+    if (fun_call->n_args > 6 and fun_call->n_args % 2 == 1) stack_padding = 8;
     if (stack_padding != 0) ainsts.emplace_back(assem::Allocate_stack(stack_padding));
 
     // pass args in registers
     int reg_index = 0;
-    for (const auto& tac_arg: tac_args) {
+    for (const auto& tac_arg: fun_call->arguments()) {
         if (reg_index >= 6) break;
         const auto asm_arg = translate_value(tac_arg);
         ainsts.emplace_back(assem::Mov(asm_arg, arg_registers[reg_index++]));
     }
 
     // pass args on stack
-    for (int index=tac_args.size()-1; index>5; index--) {
+    for (int index=fun_call->n_args-1; index>5; index--) {
         const auto asm_arg = translate_value(tac_args[index]);
         std::visit([&]<class T0>(T0&& arg) {
             using T = std::decay_t<T0>;
@@ -39,15 +39,14 @@ void Asm_generator::translate_function_call(const tac::Function_call_ptr& fun_ca
     }
 
     // emit call instruction
-    ainsts.emplace_back(assem::Call(fun_call->name));
+    ainsts.emplace_back(assem::Call(fun_call->name.data()));
 
     // adjust stack pointer
-    const int n_stack_args = tac_args.size() > 6 ? tac_args.size()-6 : 0;
-    int bytes_to_remove = 8 * n_stack_args + stack_padding;
+    const int n_stack_args = fun_call->n_args > 6 ? fun_call->n_args-6 : 0;
+    const int bytes_to_remove = 8 * n_stack_args + stack_padding;
     if (bytes_to_remove != 0) ainsts.emplace_back(assem::Deallocate_stack(bytes_to_remove));
 
     // retrieve return value
     auto func_dst = translate_value(fun_call->dst);
     ainsts.emplace_back(assem::Mov(reg::AX, func_dst));
-
 }

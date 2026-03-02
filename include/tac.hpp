@@ -189,6 +189,9 @@ namespace tac {
 
         Function(const std::string_view n, const bool g, std::string_view* p, const size_t np, Inst** i, const size_t ni)
             : name(n), global(g), params(p), n_params(np), insts(i), n_insts(ni) {}
+
+        [[nodiscard]] std::span<std::string_view> parameters() const { return {params, n_params}; }
+        [[nodiscard]] std::span<Inst*> instructions() const { return {insts, n_insts}; }
     };
 
     /**

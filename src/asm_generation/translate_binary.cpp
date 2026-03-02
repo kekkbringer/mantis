@@ -12,7 +12,7 @@
  * @param ainsts list of assembly instructions
  * @param bp TAC binary instruction to be translated.
  */
-void Asm_generator::translate_binary(std::vector<assem::Instruction>& ainsts, const tac::Binary_ptr& bp) {
+void Asm_generator::translate_binary(std::vector<assem::Instruction>& ainsts, const tac::Binary* bp) {
     // first, translate lhs, rhs and destination of the binary instruction
     const auto lhs = translate_value(bp->lhs);
     const auto rhs = translate_value(bp->rhs);

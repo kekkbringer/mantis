@@ -42,11 +42,12 @@ int compile_file(const File_info& fi, const Compiler_flags& cf) {
     Scope file_scope(nullptr);
 
     // setup arena allocator and string table for the AST
-    ArenaAllocator arena;
+    ArenaAllocator ast_arena;
+    ArenaAllocator tac_arena;
     StringTable string_table;
 
     // call the parser
-    Parser parser(source_manager, diag_engine, &file_scope, &string_table, &arena);
+    Parser parser(source_manager, diag_engine, &file_scope, &string_table, &ast_arena);
     auto prog = parser.parse();
     if (const int status = diag_engine.status(); status != 0) return status;
 #ifdef DEBUG_MODE
@@ -56,8 +57,8 @@ int compile_file(const File_info& fi, const Compiler_flags& cf) {
     if (cf.stop_after_parser) return 0;
 
     // generate TAC program
-    Tac_generator tac_gen(prog, &file_scope);
-    auto tac_prog = tac_gen.gen();
+    Tac_generator tac_gen(prog, &file_scope, &tac_arena, &string_table);
+    auto* tac_prog = tac_gen.gen();
 #ifdef DEBUG_MODE
     std::cout << "\n\nprinting TAC program:\n";
     Tac_generator::print_tac(tac_prog);

@@ -12,7 +12,7 @@
  * @param fp pointer to the function that will be translated
  * @return translated assembly function node
  */
-assem::Function Asm_generator::translate_function(const tac::Function_ptr& fp) {
+assem::Function Asm_generator::translate_function(const tac::Function* fp) {
     if (fp == nullptr) return {};
 
     assem::Function func;
@@ -24,16 +24,16 @@ assem::Function Asm_generator::translate_function(const tac::Function_ptr& fp) {
     // get parameters from registers
     constexpr std::array<const assem::Register, 6> param_registers = {reg::DI, reg::SI, reg::DX, reg::CX, reg::R8, reg::R9};
     int p_counter = 0;
-    for (const auto& param: fp->params) {
-        const assem::Operand asm_param = assem::Pseudo(param);
+    for (const auto& param: fp->parameters()) {
+        const assem::Operand asm_param = assem::Pseudo(param.data());
         func.insts.emplace_back(assem::Mov(param_registers[p_counter], asm_param));
         if (++p_counter >= 6) break;
     }
 
     // get remaining parameters from stack
-    for (size_t i=6; i<fp->params.size(); i++) {
+    for (size_t i=6; i<fp->n_params; i++) {
         const assem::Stack stk(16 + (i-6)*8);
-        const assem::Operand asm_param = assem::Pseudo(fp->params[i]);
+        const assem::Operand asm_param = assem::Pseudo(fp->params[i].data());
         func.insts.emplace_back(assem::Mov(stk, asm_param));
     }
 
@@ -41,7 +41,7 @@ assem::Function Asm_generator::translate_function(const tac::Function_ptr& fp) {
     func.insts.emplace_back(assem::Allocate_stack(0));
 
     // translate body of the function
-    translate_instructions(func.insts, fp->insts);
+    translate_instructions(func.insts, fp->instructions());
 
     return func;
 }

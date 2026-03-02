@@ -6,14 +6,13 @@
 #include "util.hpp"
 
 #include <cassert>
-#include <variant>
 #include <vector>
 
-tac::Function Tac_generator::translate_function_decl(const ast::Func_decl* fdecl) {
+tac::Function* Tac_generator::translate_function_decl(const ast::Func_decl* fdecl) {
     const auto name = fdecl->name;
 
     // fill function body by translating each block item on its own
-    std::vector<tac::Instruction_ptr> body;
+    std::vector<tac::Inst*> body;
     if (fdecl->body != nullptr)
         for (const auto bitem : fdecl->body->item_span()) translate_block_item(&bitem, body);
 
@@ -21,11 +20,11 @@ tac::Function Tac_generator::translate_function_decl(const ast::Func_decl* fdecl
     // this is done to conform to the C standard when the main function has no return statement
     // other non-void functions not having a return statement is undefined behaviour, so this approach is still
     // standard conform in such cases
-    body.emplace_back(std::make_unique<tac::Return>(tac::Constant(0)));
+    auto ret0 = arena->allocate<tac::Return>(tac::Value::make_int(0));
+    body.emplace_back(ret0);
 
-    std::vector<std::string> tac_params;
+    std::vector<std::string_view> tac_params;
     for (const auto& param: fdecl->parameters()) {
-        std::cout << "HALLO: " << param->name.data() << std::endl;
         tac_params.emplace_back(param->name);
     }
 
@@ -34,16 +33,23 @@ tac::Function Tac_generator::translate_function_decl(const ast::Func_decl* fdecl
     assert(sym != nullptr);
     const bool global = (sym->linkage == Symbol::Linkage::External);
 
-    return tac::Function(std::string(name), global, std::move(tac_params), std::move(body));
+    // copy to arena
+    auto*  param_ptr = arena->allocate_array<std::string_view>(tac_params.size());
+    auto** insts_ptr = arena->allocate_array<tac::Inst*>(body.size());
+    std::ranges::copy(tac_params, param_ptr);
+    std::ranges::copy(body, insts_ptr);
+    const auto func = arena->allocate<tac::Function>(fdecl->name, global,
+                                                    param_ptr, tac_params.size(), insts_ptr, body.size());
+
+    return func;
 }
 
-tac::Top_level_ptr Tac_generator::translate_declaration(const ast::Decl* decl) {
-    tac::Top_level_ptr tlp;
-
+std::optional<tac::Top_level> Tac_generator::translate_declaration(const ast::Decl* decl) {
     if (decl->kind == ast::Decl::Kind::Func) {
-        auto func_decl = cast<const ast::Func_decl>(decl);
-        if (func_decl->body != nullptr) tlp = std::make_unique<tac::Function>(translate_function_decl(func_decl));
+        const auto func_decl = cast<const ast::Func_decl>(decl);
+        if (func_decl->body != nullptr) {
+            return tac::Top_level(translate_function_decl(func_decl));
+        }
     }
-
-    return tlp;
+    return {};
 }

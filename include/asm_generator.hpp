@@ -29,19 +29,19 @@
  */
 class Asm_generator {
 private:
-    tac::Program tac_prog;       ///< TAC program tree that will be translated to an assembly tree
+    tac::Program* tac_prog;       ///< TAC program tree that will be translated to an assembly tree
     Scope* file_scope = nullptr; ///< Symbol table (Pointer to file/global scope)
 
     // translation routines
     void translate_program(assem::Program& prog);
-    void translate_top_level(assem::Program& prog, const tac::Top_level_ptr& tlp);
-    assem::Function translate_function(const tac::Function_ptr& fp);
-    void translate_instructions(std::vector<assem::Instruction>& ainsts, const std::vector<tac::Instruction_ptr>& tinsts);
-    void translate_return(std::vector<assem::Instruction>& ainsts, const tac::Return_ptr& rp);
-    void translate_unary(std::vector<assem::Instruction>& ainsts, const tac::Unary_ptr& up);
-    void translate_binary(std::vector<assem::Instruction>& ainsts, const tac::Binary_ptr& bp);
-    assem::Operand translate_value(const tac::Value_ptr& vp);
-    void translate_function_call(const tac::Function_call_ptr& fun_call, std::vector<assem::Instruction>& ainsts);
+    void translate_top_level(assem::Program& prog, const tac::Top_level* tlp);
+    assem::Function translate_function(const tac::Function* fp);
+    void translate_instructions(std::vector<assem::Instruction>& ainsts, const std::span<tac::Inst*>& tinsts);
+    void translate_return(std::vector<assem::Instruction>& ainsts, const tac::Return* rp);
+    void translate_unary(std::vector<assem::Instruction>& ainsts, const tac::Unary* up);
+    void translate_binary(std::vector<assem::Instruction>& ainsts, const tac::Binary* bp);
+    assem::Operand translate_value(const tac::Value& vp);
+    void translate_function_call(const tac::Function_call* fun_call, std::vector<assem::Instruction>& ainsts);
     void preg_to_stack(assem::Operand& op, std::unordered_map<std::string, int>& map, int& stack_top);
     void pseudo_reg_inst(assem::Instruction& inst, std::unordered_map<std::string, int>& map, int& stack_top);
 
@@ -50,7 +50,7 @@ private:
     void replace_double_stack(assem::Program& prog);
 
 public:
-    explicit Asm_generator(tac::Program& tp, Scope* fs) : tac_prog(std::move(tp)), file_scope(fs) {}
+    explicit Asm_generator(tac::Program* tp, Scope* fs) : tac_prog(tp), file_scope(fs) {}
 
     // driver of the translation process
     assem::Program gen();
