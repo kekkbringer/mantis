@@ -38,7 +38,7 @@ void Asm_generator::translate_instructions(std::vector<assem::Instruction>& ains
                 const auto* jiz = cast<tac::Jump_if_zero const>(tinst);
                 const auto cond = translate_value(jiz->cond);
                 ainsts.emplace_back(assem::Cmp(assem::Immediate_value(0), cond));
-                ainsts.emplace_back(assem::JmpCC(assem::Cond_code::E, jiz->target.data()));
+                ainsts.emplace_back(assem::JmpCC(assem::Cond_code::E, jiz->target));
                 break;
             }
 
@@ -46,19 +46,19 @@ void Asm_generator::translate_instructions(std::vector<assem::Instruction>& ains
                 const auto* jinz = cast<tac::Jump_if_not_zero const>(tinst);
                 auto cond = translate_value(jinz->cond);
                 ainsts.emplace_back(assem::Cmp(assem::Immediate_value(0), cond));
-                ainsts.emplace_back(assem::JmpCC(assem::Cond_code::NE, jinz->target.data()));
+                ainsts.emplace_back(assem::JmpCC(assem::Cond_code::NE, jinz->target));
                 break;
             }
 
             case tac::Inst::Kind::Jump: {
                 const auto* jump = cast<tac::Jump const>(tinst);
-                ainsts.emplace_back(assem::Jmp(jump->target.data()));
+                ainsts.emplace_back(assem::Jmp(jump->target));
                 break;
             }
 
             case tac::Inst::Kind::Label: {
                 const auto* lab = cast<tac::Label const>(tinst);
-                ainsts.emplace_back(assem::Label(lab->name.data()));
+                ainsts.emplace_back(assem::Label(lab->name));
                 break;
             }
 
