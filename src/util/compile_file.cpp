@@ -51,8 +51,12 @@ int compile_file(const File_info& fi, const Compiler_flags& cf) {
     auto prog = parser.parse();
     if (const int status = diag_engine.status(); status != 0) return status;
 #ifdef DEBUG_MODE
+    #ifdef ARENA_PROFILE
+    std::cout << "AST arena info:\n";
+    ast_arena.print_mem_info();
+    #endif
     std::cout << "\n\nprinting AST program:\n";
-    //Parser::print_program(prog); //TODO: uncomment again
+    Parser::print_program(prog); //TODO: uncomment again
 #endif
     if (cf.stop_after_parser) return 0;
 
@@ -60,6 +64,10 @@ int compile_file(const File_info& fi, const Compiler_flags& cf) {
     Tac_generator tac_gen(prog, &file_scope, &tac_arena, &string_table);
     auto* tac_prog = tac_gen.gen();
 #ifdef DEBUG_MODE
+    #ifdef ARENA_PROFILE
+    std::cout << "TAC arena info:\n";
+    tac_arena.print_mem_info();
+    #endif
     std::cout << "\n\nprinting TAC program:\n";
     Tac_generator::print_tac(tac_prog);
 #endif

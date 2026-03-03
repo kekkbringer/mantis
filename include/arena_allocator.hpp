@@ -9,6 +9,13 @@
 #include <utility>
 #include <vector>
 
+#define ARENA_PROFILE
+
+#ifdef ARENA_PROFILE
+#include <iostream>
+#include <stdio.h>
+#endif
+
 /**
  * A bump pointer arena allocator, manages memory in slabs of increasing size. Individual allocations are all made
  * sequentially within the slabs. The size of the slabs double each time up to a fixed limit. A newly created slab is at
@@ -59,6 +66,9 @@ private:
      * @return pointer to allocated memory
      */
     void* allocate(const size_t size, const size_t alignment) {
+//#ifdef ARENA_PROFILE
+//        print_mem_info();
+//#endif
         // try to put into the latest slab first
         Slab* current = slabs.back();
 
@@ -97,6 +107,10 @@ private:
 public:
     ArenaAllocator() {
         slabs.emplace_back(new Slab(initial_slab_size));
+#ifdef ARENA_PROFILE
+        static int id = 0;
+        arena_id = id++;
+#endif
     }
 
     ~ArenaAllocator() {
@@ -152,6 +166,50 @@ public:
         // cast pointer and return, no construction
         return static_cast<T*>(ptr);
     }
+
+#ifdef ARENA_PROFILE
+    /* This section contains profiling functions for the arena allocator.
+     * These are activated by defining ARENA_PROFILE. */
+    int arena_id;
+
+    std::pair<double, const char*> mem_to_string(const size_t mem) {
+        constexpr const char* const unit[] = {"B ", "KB", "MB", "GB", "TB"};
+        double size = mem;
+        size_t n = 0;
+
+        while (size >= 1024) {
+            size /= 1024;
+            ++n;
+        }
+
+        if (n<5) return {size, unit[n]};
+        else return {size, "XB"};
+    }
+
+    void print_mem_info() {
+        const size_t n_slabs = slabs.size();
+        size_t tot_cap = 0;
+        size_t tot_used = 0;
+        std::cout << "\n ===== ARENA PROFILE =====\n";
+        std::cout << "ARENA ID: " << arena_id << "\n";
+        std::cout << "arena contains " << n_slabs << " slabs\n";
+        std::cout << "slab     cap     used     used%\n";
+        
+        for (size_t i=0; i<n_slabs; i++) {
+            auto* slab = slabs[i];
+            printf(" %2li    %5.1f%2s  %5.1f%2s  %5.2f\n", i, mem_to_string(slab->capacity).first, mem_to_string(slab->capacity).second,
+                                                             mem_to_string(slab->used).first, mem_to_string(slab->used).second,
+                                                             (100.0*slab->used)/slab->capacity);
+            tot_cap += slab->capacity;
+            tot_used += slab->used;
+        }
+        printf("total  %5.1f%2s  %5.1f%2s  %5.2f\n", mem_to_string(tot_cap).first, mem_to_string(tot_cap).second,
+                                                     mem_to_string(tot_used).first, mem_to_string(tot_used).second,
+                                                     (100.0*tot_used)/tot_cap);
+
+    }
+    
+#endif
 };
 
 #endif //UNTITLED_ARENA_ALLOCATOR_HPP

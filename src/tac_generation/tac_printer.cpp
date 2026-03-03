@@ -3,135 +3,155 @@
 //
 
 #include "tac_generator.hpp"
+#include "util.hpp"
 
 #include <iostream>
 #include <cassert>
 
-void print_value(const tac::Value* vp, int& shift) {
-    //shift++;
-    //std::string pre = "";
-    //for (int i=0; i<shift; i++) pre += "   ";
+void print_value(const tac::Value& vp, int& shift) {
+    shift++;
+    std::string pre = "";
+    for (int i=0; i<shift; i++) pre += "   ";
 
-    //std::visit([&]<class T0>(T0&& arg) {
-    //    using T = std::decay_t<T0>;
-    //    if constexpr (std::is_same_v<T, tac::Constant>) {
-    //        std::cout << pre << "Constant: " << arg.val << "\n";
-    //    } else if constexpr (std::is_same_v<T, tac::Variable>) {
-    //        std::cout << pre << "Variable: " << arg.name << "\n";
-    //    } else {
-    //        assert("false" && "internal error, impossible branch");
-    //    }
-    //}, *vp);
+    if (vp.kind == tac::Value::Kind::Int_constant) {
+        std::cout << pre << "INT CONSTANT: " << vp.int_val << "\n";
 
-    //shift--;
+    } else if (vp.kind == tac::Value::Kind::Variable) {
+        std::cout << pre << "VARIABLE: " << vp.name << "\n";
+
+    } else {
+        std::cout << "UNKNOWN VALUE\n";
+    }
+
+    shift--;
 }
 
 void print_instruction(const tac::Inst* ip, int& shift) {
-    //shift++;
-    //std::string pre = "";
-    //for (int i=0; i<shift; i++) pre += "   ";
+    shift++;
+    std::string pre = "";
+    for (int i=0; i<shift; i++) pre += "   ";
 
-    //std::visit([&]<class T0>(T0&& arg) {
-    //    using T = std::decay_t<T0>;
-    //    if constexpr (std::is_same_v<T, tac::Return_ptr>) {
-    //        std::cout << pre << "Return\n";
-    //        print_value(arg->val, shift);
+    switch (ip->kind) {
+        case tac::Inst::Kind::Return: {
+            const auto* ret = cast<tac::Return const>(ip);
+            std::cout << pre << "RETURN\n";
+            print_value(ret->val, shift);
+            break;
+        }
 
-    //    // unary
-    //    } else if constexpr (std::is_same_v<T, tac::Unary_ptr>) {
-    //        std::cout << pre << "Unary: " << tac::to_string(arg->op) << "\n";
-    //        print_value(arg->src, shift);
-    //        std::cout << pre << "   to\n";
-    //        print_value(arg->dst, shift);
+        case tac::Inst::Kind::Unary: {
+            const auto* un = cast<tac::Unary const>(ip);
+            std::cout << pre << "UNARY: " << tac::to_string(un->op) << "\n";
+            std::cout << pre << "-from:\n";
+            print_value(un->src, shift);
+            std::cout << pre << "-to:\n";
+            print_value(un->dst, shift);
+            break;
+        }
 
-    //    // binary
-    //    } else if constexpr (std::is_same_v<T, tac::Binary_ptr>) {
-    //        std::cout << pre << "Binary: " << tac::to_string(arg->op) << "\n";
-    //        print_value(arg->lhs, shift);
-    //        std::cout << pre << "   and\n";
-    //        print_value(arg->rhs, shift);
-    //        std::cout << pre << "   to\n";
-    //        print_value(arg->dst, shift);
+        case tac::Inst::Kind::Binary: {
+            const auto* bin = cast<tac::Binary const>(ip);
+            std::cout << pre << "BINARY: " << tac::to_string(bin->op) << "\n";
+            std::cout << pre << "-lhs\n";
+            print_value(bin->lhs, shift);
+            std::cout << pre << "-rhs\n";
+            print_value(bin->rhs, shift);
+            std::cout << pre << "-to\n";
+            print_value(bin->dst, shift);
+            break;
+        }
 
-    //    // label
-    //    } else if constexpr (std::is_same_v<T, tac::Label_ptr>) {
-    //        std::cout << pre << "Label: " << arg->name << "\n";
+        case tac::Inst::Kind::Copy: {
+            const auto* cpy = cast<tac::Copy const>(ip);
+            std::cout << pre << "Copy\n";
+            std::cout << pre << "-from\n";
+            print_value(cpy->src, shift);
+            std::cout << pre << "-to\n";
+            print_value(cpy->dst, shift);
+            break;
+        }
 
-    //    // jump
-    //    } else if constexpr (std::is_same_v<T, tac::Jump_ptr>) {
-    //        std::cout << pre << "Jump to " << arg->target << "\n";
+        case tac::Inst::Kind::Jump: {
+            const auto* jmp = cast<tac::Jump const>(ip);
+            std::cout << pre << "JUMP to " << jmp->target << "\n";
+            break;
+        }
 
-    //    // jump if zero
-    //    } else if constexpr (std::is_same_v<T, tac::Jump_if_zero_ptr>) {
-    //        std::cout << pre << "Jump_if_zero to " << arg->target << "\n";
-    //        print_value(arg->cond, shift);
+        case tac::Inst::Kind::Jump_if_zero: {
+            const auto* jiz = cast<tac::Jump_if_zero const>(ip);
+            std::cout << pre << "JUMP_IF_ZERO to " << jiz->target << "\n";
+            print_value(jiz->cond, shift);
+            break;
+        }
 
-    //    // jump if not zero
-    //    } else if constexpr (std::is_same_v<T, tac::Jump_if_not_zero_ptr>) {
-    //        std::cout << pre << "Jump_if_not_zero to " << arg->target << "\n";
-    //        print_value(arg->cond, shift);
+        case tac::Inst::Kind::Jump_if_not_zero: {
+            const auto* jinz = cast<tac::Jump_if_not_zero const>(ip);
+            std::cout << pre << "JUMP_IF_NOT_ZERO to " << jinz->target << "\n";
+            print_value(jinz->cond, shift);
+            break;
+        }
 
-    //    // copy
-    //    } else if constexpr (std::is_same_v<T, tac::Copy_ptr>) {
-    //        std::cout << pre << "Copy\n";
-    //        print_value(arg->src, shift);
-    //        std::cout << pre << "   to\n";
-    //        print_value(arg->dst, shift);
+        case tac::Inst::Kind::Label: {
+            const auto* lab = cast<tac::Label const>(ip);
+            std::cout << pre << "LABEL: " << lab->name << "\n";
+            break;
+        }
 
-    //    // function call
-    //    } else if constexpr (std::is_same_v<T, tac::Function_call_ptr>) {
-    //        std::cout << pre << "Function call with name " << arg->name << "\n";
-    //        for (const auto& a: arg->args) print_value(a, shift);
-    //        std::cout << pre << "   to\n" ;
-    //        print_value(arg->dst, shift);
+        case tac::Inst::Kind::Function_call: {
+            const auto* fun_call = cast<tac::Function_call const>(ip);
+            std::cout << pre << "FUNCTION CALL with name " << fun_call->name << "\n";
+            std::cout << pre << "-parameters:\n" ;
+            for (const auto& a: fun_call->arguments()) print_value(a, shift);
+            std::cout << pre << "-to\n" ;
+            print_value(fun_call->dst, shift);
+            break;
+        }
+    }
 
-    //    } else {
-    //        assert(false && "print_instruction not fully implemented yet");
-    //    }
-    //}, ip);
-
-    //shift--;
+    shift--;
 }
 
 void print_function(const tac::Function* fp, int& shift) {
     if (fp == nullptr) return;
 
-    //shift++;
-    //std::string pre = "";
-    //for (int i=0; i<shift; i++) pre += "   ";
+    shift++;
+    std::string pre = "";
+    for (int i=0; i<shift; i++) pre += "   ";
 
-    //std::cout << pre << "Function: " << fp->name << "\n";
-    //for (const auto& ip: fp->insts) {
-    //    print_instruction(ip, shift);
-    //}
+    std::cout << pre << "FUNCTION: " << fp->name << "\n";
+    std::cout << pre << "-is global: " << (fp->global ? "yes" : "no") << "\n";
+    std::cout << pre << "-parameter: ";
+    for (const auto& p: fp->parameters()) std::cout << p << ", ";
+    std::cout << "\n";
+    std::cout << pre << "-body:\n";
+    for (const auto& ip: fp->instructions()) {
+        print_instruction(ip, shift);
+    }
 
-    //shift--;
+    shift--;
 }
 
 void print_static_variable(const tac::Static_variable* svp, int& shift) {
-    //shift++;
-    //std::string pre = "";
-    //for (int i=0; i<shift; i++) pre += "   ";
+    shift++;
+    std::string pre = "";
+    for (int i=0; i<shift; i++) pre += "   ";
 
-    //std::cout << pre << "Static variable: " << svp->name << "\n";
-    //std::cout << pre << "   is global: " << (svp->global ? "yes" : "no") << "\n";
-    //std::cout << pre << "   init: " << svp->init << "\n";
+    std::cout << pre << "STATIC VARIABLE: " << svp->name << "\n";
+    std::cout << pre << "-is global: " << (svp->global ? "yes" : "no") << "\n";
+    std::cout << pre << "-init: " << svp->init << "\n";
 
-    //shift--;
+    shift--;
 }
 
-void print_top_level(const tac::Top_level& tlp) {
-    //int shift = 0;
-    //std::visit([&]<class T0>(T0&& arg) {
-    //    using T = std::decay_t<T0>;
-    //    if constexpr (std::is_same_v<T, tac::Function_ptr>) {
-    //        print_function(arg, shift);
-    //    } else if constexpr (std::is_same_v<T, tac::Static_variable_ptr>) {
-    //        print_static_variable(arg, shift);
-    //    } else {
-    //        assert(false && "internal error, impossible branch");
-    //    }
-    //}, tlp);
+void print_top_level(const tac::Top_level& tl) {
+    int shift = 0;
+    
+    if (tl.kind == tac::Top_level::Kind::Function) {
+        print_function(tl.func, shift);
+
+    } else if (tl.kind == tac::Top_level::Kind::Static_variable) {
+        print_static_variable(tl.stat_var, shift);
+    }
 }
 
 void Tac_generator::print_tac(const tac::Program* prog) {

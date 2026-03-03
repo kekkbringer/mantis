@@ -24,7 +24,7 @@ void Tac_generator::traverse_scope(Scope* scope, std::vector<tac::Top_level>& ta
                 // tentative init
                 } else if (sym.init == Symbol::Init::Tentative) {
                     const auto unique_name_view = string_table->intern(sym.unique_name);
-                    auto* ptr = arena->allocate<tac::Static_variable>(sym.unique_name, sym.linkage == Symbol::Linkage::External, 0);
+                    auto* ptr = arena->allocate<tac::Static_variable>(unique_name_view, sym.linkage == Symbol::Linkage::External, 0);
                     tac_tl.emplace_back(ptr);
                 }
             }
