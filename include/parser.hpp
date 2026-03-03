@@ -204,7 +204,7 @@ public:
      * Debug routine that prints the whole AST to std::cout
      */
     void print_AST();
-    static void print_program(const ast::Program& prog);
+    static void print_program(const ast::Program* prog);
 };
 
 #endif
