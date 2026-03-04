@@ -114,7 +114,7 @@ private:
      * current scope pointer to the newly created one.
      */
     void enter_new_scope() {
-        auto new_scope = std::make_unique<Scope>(current_scope);
+        auto new_scope = std::make_unique<Scope>(current_scope, string_table);
         current_scope->children.push_back(std::move(new_scope));
         current_scope = current_scope->children.back().get();
     }

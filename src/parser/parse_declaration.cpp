@@ -192,7 +192,7 @@ ast::Decl* Parser::parse_declaration_inner() {
         // block scope 'static' function is not valid
         if (current_scope->parent->parent != nullptr) {
             if (sc == ast::Decl::Storage_class::Static) {
-                std::string msg = "of function " + sym.name;
+                std::string msg = "of function " + std::string(sym.name);
                 diag.report_issue(Severity::Error, loc, Error_kind::Invalid_storage_class, msg);
             }
         }
@@ -203,14 +203,14 @@ ast::Decl* Parser::parse_declaration_inner() {
             if (lookup_sym->kind == Symbol::Kind::Func) {
                 // check for mismatched types
                 if (*lookup_sym->type != *sym.type) {
-                    std::string msg = "with name " + sym.name;
+                    std::string msg = "with name " + std::string(sym.name);
                     diag.report_issue(Severity::Error, loc, Error_kind::Incompatible_function_redeclaration, msg);
                     diag.report_issue(Severity::Note, get_location(lookup_sym), Error_kind::First_defined_here, "");
                 }
 
                 // check if a static function declaration follows a non-static declaration
                 if (lookup_sym->linkage == Symbol::Linkage::External and sc == ast::Decl::Storage_class::Static) {
-                    std::string msg = "with name " + sym.name + ". First defined non-static, now static.";
+                    std::string msg = "with name " + std::string(sym.name) + ". First defined non-static, now static.";
                     diag.report_issue(Severity::Error, loc, Error_kind::Incompatible_function_redeclaration, msg);
                     diag.report_issue(Severity::Note, get_location(lookup_sym), Error_kind::First_defined_here, "");
                 }
@@ -436,7 +436,7 @@ ast::Decl* Parser::parse_declaration_inner() {
             } else if (sc == ast::Decl::Storage_class::Static) {
                 // check for redeclaration
                 if (current_scope->symbols.contains(sym.name)) {
-                    const std::string msg = "with name " + sym.name;
+                    const std::string msg = "with name " + std::string(sym.name);
                     diag.report_issue(Severity::Error, current, Error_kind::Duplicate_variable_decl, msg);
                     diag.report_issue(Severity::Note, get_location(current_scope->lookup(name)),
                                                                             Error_kind::First_defined_here, "");
@@ -448,7 +448,7 @@ ast::Decl* Parser::parse_declaration_inner() {
             } else {
                 // declare variable in current scope (automatically check for duplicate declaration)
                 if (not current_scope->declare(sym, mangle_counter)) {
-                    const std::string msg = "with name " + sym.name;
+                    const std::string msg = "with name " + std::string(sym.name);
                     diag.report_issue(Severity::Error, current, Error_kind::Duplicate_variable_decl, msg);
                     diag.report_issue(Severity::Note, get_location(current_scope->lookup(name)),
                                                         Error_kind::First_defined_here, "");

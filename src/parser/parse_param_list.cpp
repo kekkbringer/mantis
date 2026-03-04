@@ -34,7 +34,7 @@ std::vector<ast::Var_decl*> Parser::parse_param_list(std::vector<std::shared_ptr
 
         // declare variable in current scope (automatically check for duplicate declaration)
         if (not current_scope->declare(sym, mangle_counter)) {
-            std::string msg = "with name " + sym.name;
+            std::string msg = "with name " + std::string(sym.name);
             diag.report_issue(Severity::Error, current, Error_kind::Duplicate_variable_decl, msg);
             diag.report_issue(Severity::Note, get_location(current_scope->lookup(std::string(name))), Error_kind::First_defined_here, "");
         }
@@ -66,7 +66,7 @@ std::vector<ast::Var_decl*> Parser::parse_param_list(std::vector<std::shared_ptr
 
             // declare variable in current scope (automatically check for duplicate declaration)
             if (not current_scope->declare(sym, mangle_counter)) {
-                std::string msg = "with name " + sym.name;
+                std::string msg = "with name " + std::string(sym.name);
                 diag.report_issue(Severity::Error, current, Error_kind::Duplicate_variable_decl, msg);
                 diag.report_issue(Severity::Note, get_location(current_scope->lookup(name)), Error_kind::First_defined_here, "");
             }
