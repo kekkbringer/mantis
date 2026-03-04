@@ -21,10 +21,10 @@
  * AST is translated to a three address code (TAC). Next, the TAC is translated to assembly which is then emitted to a
  * file in the final step of compilation.
  * @param fi contains information of the file that's to be compiled
- * @param cf contains flags used during the compilation process
+ * @param config contains flags used during the compilation process
  * @return status code, 0 only if everything was successful
  */
-int compile_file(const File_info& fi, const Compiler_flags& cf) {
+int compile_file(const File_info& fi, const Config& config) {
     // if .s file is given -> just go to assembler
     if (fi.extension == ".s" or fi.extension == ".S") return 0;
 
@@ -51,36 +51,46 @@ int compile_file(const File_info& fi, const Compiler_flags& cf) {
     auto prog = parser.parse();
     if (const int status = diag_engine.status(); status != 0) return status;
 #ifdef DEBUG_MODE
-    #ifdef ARENA_PROFILE
-    std::cout << "AST arena info:\n";
-    ast_arena.print_mem_info();
-    #endif
-    std::cout << "\n\nprinting AST program:\n";
-    Parser::print_program(prog); //TODO: uncomment again
+    if (config.verbose) {
+        #ifdef ARENA_PROFILE
+        std::cout << "AST arena info:";
+        ast_arena.print_mem_info();
+        #endif
+        if (config.verbose_level > 1) {
+            std::cout << "\n\nprinting AST program:\n";
+            Parser::print_program(prog);
+        }
+    }
 #endif
-    if (cf.stop_after_parser) return 0;
+    if (config.stop_after_parser) return 0;
 
     // generate TAC program
     Tac_generator tac_gen(prog, &file_scope, &tac_arena, &string_table);
     auto* tac_prog = tac_gen.gen();
 #ifdef DEBUG_MODE
-    #ifdef ARENA_PROFILE
-    std::cout << "TAC arena info:\n";
-    tac_arena.print_mem_info();
-    #endif
-    std::cout << "\n\nprinting TAC program:\n";
-    Tac_generator::print_tac(tac_prog);
+    if (config.verbose) {
+        #ifdef ARENA_PROFILE
+        std::cout << "TAC arena info:";
+        tac_arena.print_mem_info();
+        #endif
+        if (config.verbose_level > 1) {
+            std::cout << "\n\nprinting TAC program:\n";
+            Tac_generator::print_tac(tac_prog);
+        }
+    }
 #endif
-    if (cf.stop_after_tac) return 0;
+    if (config.stop_after_tac) return 0;
 
     // translate TAC to assembler
     Asm_generator asm_gen(tac_prog, &file_scope);
     auto asm_prog = asm_gen.gen();
 #ifdef DEBUG_MODE
-    std::cout << "\n\nprinting ASM program:\n";
-    Asm_generator::print_asm(asm_prog);
+    if (config.verbose and config.verbose_level > 1) {
+        std::cout << "\n\nprinting ASM program:\n";
+        Asm_generator::print_asm(asm_prog);
+    }
 #endif
-    if (cf.stop_after_codegen) return 0;
+    if (config.stop_after_codegen) return 0;
 
     // code emission
     //const std::string asm_file = (fi.path + fi.file_name + ".s");

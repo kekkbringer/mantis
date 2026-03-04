@@ -2,8 +2,8 @@
 // Created by dominik on 2/25/26.
 //
 
-#ifndef UNTITLED_AST_HPP
-#define UNTITLED_AST_HPP
+#ifndef AST_HPP
+#define AST_HPP
 
 #include <cstddef>
 #include <span>
@@ -441,4 +441,4 @@ namespace ast {
     };
 }
 
-#endif //UNTITLED_AST_HPP
+#endif //AST_HPP
