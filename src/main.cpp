@@ -3,7 +3,10 @@
 #include <vector>
 
 #include "version.hpp"
+#include "cli_engine.hpp"
+#include "config.hpp"
 #include "util.hpp"
+#include "version.hpp"
 
 int main(const int argc, const char* argv[]) {
 #ifdef DEBUG_MODE
@@ -25,12 +28,19 @@ int main(const int argc, const char* argv[]) {
     int status;
 
     // structures for control flow
-    std::vector<File_info> file_info_vec;
-    Compiler_flags compiler_flags;
+    Config config = parse_cli_arguments(argc, argv);
 
-    const int cli_info = parse_cli_arguments(argc, argv, file_info_vec, compiler_flags);
-    if (cli_info == -1) return 0; // '--help' or '--version' -> no compilation but successful termination
-    if (cli_info != 0) return cli_info;
+    if (config.print_version) {
+        std::cout << "mantis " << MANTIS_VERSION << "\n";
+        return 0;
+    }
+
+    if (config.print_help) {
+        print_mantis_help();
+        return 0;
+    }
+
+    const auto file_info_vec = parse_file_info(config.input_files);
 
     // make call to compiler and assembler
     for (const auto& file_info: file_info_vec) {
@@ -38,7 +48,7 @@ int main(const int argc, const char* argv[]) {
 
         // C-source files
         if (file_info.extension == ".c" or file_info.extension == ".cm") {
-            status = compile_file(file_info, compiler_flags);
+            status = compile_file(file_info, config);
             if (status != 0) return status;
 
         // asm source files
@@ -47,7 +57,7 @@ int main(const int argc, const char* argv[]) {
         }
 
         // call GCC assembler
-        if (not compiler_flags.stop_after_compilation) {
+        if (not config.stop_after_compilation) {
             //const std::string asm_command =
             //    "gcc -c " + file_info.path + file_info.file_name
             //    + ".s -o " + file_info.path + file_info.file_name + ".o";
@@ -55,7 +65,7 @@ int main(const int argc, const char* argv[]) {
                 "gcc -c " + file_info.file_name + ".s -o " + file_info.file_name + ".o";
 
 #ifdef DEBUG_MODE
-            if (compiler_flags.verbose) {
+            if (config.verbose) {
                 std::cout << asm_command << std::endl;
             }
 #endif
@@ -63,15 +73,15 @@ int main(const int argc, const char* argv[]) {
             if (status != 0) return status;
 
             // delete assembler file
-            if (not compiler_flags.stop_after_compilation and not asm_file) {
+            if (not config.stop_after_compilation and not asm_file) {
                 status = std::system(("rm -f " + file_info.file_name + ".s").c_str());
                 if (status != 0) return status;
             }
         }
     }
 
-    if (compiler_flags.stop_after_compilation) return 0;
-    if (compiler_flags.stop_after_assembly) return 0;
+    if (config.stop_after_compilation) return 0;
+    if (config.stop_after_assembly) return 0;
 
 
     // link object files info final output
@@ -79,10 +89,15 @@ int main(const int argc, const char* argv[]) {
     //for (auto& fi: file_info_vec) link_command += " " + fi.path + fi.file_name + ".o";
     for (auto& fi: file_info_vec) link_command += " " + fi.file_name + ".o";
     //link_command += " -o " + file_info_vec[0].path + file_info_vec[0].file_name; // for legacy purposes
-    link_command += " -o " + file_info_vec[0].file_name;
+
+    if (not config.output.empty()) {
+        link_command += " -o " + config.output;
+    } else {
+        link_command += " -o " + file_info_vec[0].file_name;
+    }
 
 #ifdef DEBUG_MODE
-    if (compiler_flags.verbose) {
+    if (config.verbose) {
         std::cout << link_command << std::endl;
     }
 #endif

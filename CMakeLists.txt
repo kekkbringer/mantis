@@ -6,7 +6,7 @@ project(mantis)
 # define version components
 set(mantis_VERSION_MAJOR 0)
 set(mantis_VERSION_MINOR 1)
-set(mantis_VERSION_PATCH 0)
+set(mantis_VERSION_PATCH 1)
 set(mantis_VERSION "${mantis_VERSION_MAJOR}.${mantis_VERSION_MINOR}.${mantis_VERSION_PATCH}")
 
 # use C++ 23 standard
