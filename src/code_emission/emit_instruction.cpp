@@ -50,7 +50,10 @@ void Code_emitter::emit_instruction(const assem::Instruction& i) {
             else if (arg.op == assem::Bin_op::Sal) os << "\tsall\t";
             else if (arg.op == assem::Bin_op::Sar) os << "\tsarl\t";
             else assert(false && "binop emission");
-            emit_operand(arg.src);
+            
+            // bitshift need lower 1byte = 8bit register
+            if (arg.op == assem::Bin_op::Sal or arg.op == assem::Bin_op::Sar) emit_operand(arg.src, 1);
+            else emit_operand(arg.src);
             os << ", ";
             emit_operand(arg.dst);
             os << "\n";
