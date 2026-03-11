@@ -9,13 +9,15 @@
 #include <cassert>
 #include <iostream>
 #include <string>
+#include <string_view>
 
 #include "type_system.hpp"
+#include "string_table.hpp"
 #include "ast.hpp"
 
 struct Symbol {
-    std::string name;
-    std::string unique_name;
+    std::string_view name;
+    std::string_view unique_name;
     std::shared_ptr<Type> type = nullptr;
     ast::Decl* decl;
     enum class Linkage {None, Internal, External} linkage = Linkage::None;
@@ -66,8 +68,8 @@ struct Symbol {
     }
 
     [[nodiscard]] std::string to_string() const {
-        std::string msg = "name: " + name + "\n"
-                        + "unique_name: " + unique_name + "\n"
+        std::string msg = std::string("name: ") + std::string(name) + "\n"
+                        + "unique_name: " + std::string(unique_name) + "\n"
                         //+ "type: " + "NOT YET IMPLEMENTED" + "\n"
                         //+ "decl: " + "NOT YET IMPLEMENTED" + "\n"
                         + "linkage: " + to_string(linkage) + "\n"
@@ -82,12 +84,14 @@ class Scope {
 public:
     Scope* parent = nullptr;
     std::vector<std::unique_ptr<Scope>> children; // a Scope owns all of its children
-    std::unordered_map<std::string, Symbol> symbols;
+    std::unordered_map<std::string_view, Symbol> symbols;
+    StringTable* string_table; ///< pointer to the global string table
 
-    explicit Scope(Scope* parent = nullptr) : parent(parent) {}
+    explicit Scope(Scope* parent = nullptr, StringTable* st = nullptr)
+        : parent(parent), string_table(st) {}
 
-    static std::string mangle_name(const std::string& name, size_t& mangle_counter) {
-        return ".ma." + std::to_string(mangle_counter++) + "." + name;
+    std::string_view mangle_name(const std::string_view& name, size_t& mangle_counter) {
+        return string_table->intern(std::string(".ma.") + std::to_string(mangle_counter++) + "." + std::string(name));
     }
 
     /**
@@ -117,7 +121,7 @@ public:
      * @param name name to search for
      * @return pointer to the symbol of 'name' if found, 'nullptr' otherwise
      */
-    Symbol* lookup(const std::string& name) {
+    Symbol* lookup(const std::string_view& name) {
         for (Scope* s=this; s!=nullptr; s=s->parent) {
             auto it = s->symbols.find(name);
             if (it != s->symbols.end())
@@ -131,7 +135,7 @@ public:
      * @param name name to search for
      * @return pointer to the symbol of 'name' if found, 'nullptr' otherwise
      */
-    Symbol* find_sym(const std::string& name) {
+    Symbol* find_sym(const std::string_view& name) {
         // find global scope
         if (parent != nullptr) return parent->find_sym(name);
 
@@ -155,7 +159,7 @@ public:
      * @param unique_name unique/mangled name to check in addition to name
      * @return pointer to the symbol of 'name' if found, 'nullptr' otherwise
      */
-    Symbol* find_sym(const std::string& name, const std::string& unique_name) {
+    Symbol* find_sym(const std::string_view& name, const std::string_view& unique_name) {
         // find global scope
         if (parent != nullptr) return parent->find_sym(name, unique_name);
 
@@ -178,13 +182,13 @@ public:
     }
 
     // looks for the name in all scopes
-    Symbol* find_global(const std::string& name) {
+    Symbol* find_global(const std::string_view& name) {
         // find global scope
         if (parent != nullptr) return parent->find_global(name);
         else return find_sym(name);
     }
 
-    Symbol* descent_search(const std::string& name, const std::string& unique_name) {
+    Symbol* descent_search(const std::string_view& name, const std::string_view& unique_name) {
         // search in this scope
         const auto it = symbols.find(name);
         if (it != symbols.end()) {
@@ -203,13 +207,13 @@ public:
     }
 
     // looks for the name+unique_name in all scopes
-    Symbol* find_global(const std::string& name, const std::string& unique_name) {
+    Symbol* find_global(const std::string_view& name, const std::string_view& unique_name) {
         // find global scope
         if (parent != nullptr) return parent->find_global(name, unique_name);
         else return descent_search(name, unique_name);
     }
 
-    Symbol* any_external_linkage(const std::string& name) {
+    Symbol* any_external_linkage(const std::string_view& name) {
         // check this scope
         const auto it = symbols.find(name);
         if (it != symbols.end() and it->second.linkage == Symbol::Linkage::External)
@@ -225,7 +229,7 @@ public:
     }
 
     // look only in the file scope
-    Symbol* lookup_file_scope(const std::string& name) {
+    Symbol* lookup_file_scope(const std::string_view& name) {
         if (parent != nullptr) return parent->lookup_file_scope(name);
 
         // only check file scope
