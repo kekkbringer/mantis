@@ -14,7 +14,18 @@
  */
 std::string to_string(const assem::Register& reg, const int size) {
     using namespace assem;
-    if (size == 4)
+    if (size == 1)
+    switch (reg.reg) {
+        case Reg::AX: return "al"; case Reg::BX: return "bl";
+        case Reg::CX: return "cl"; case Reg::DX: return "dl";
+        case Reg::SP: return "spl"; case Reg::BP: return "bpl";
+        case Reg::DI: return "dil"; case Reg::SI: return "sil";
+        case Reg::R8: return "r8b"; case Reg::R9: return "r9b";
+        case Reg::R10: return "r10b"; case Reg::R11: return "r11b";
+        case Reg::R12: return "r12b"; case Reg::R13: return "r13b";
+        case Reg::R14: return "r14b"; case Reg::R15: return "r15b";
+    }
+    else if (size == 4)
     switch (reg.reg) {
         case Reg::AX: return "eax"; case Reg::BX: return "ebx";
         case Reg::CX: return "ecx"; case Reg::DX: return "edx";
@@ -35,7 +46,7 @@ std::string to_string(const assem::Register& reg, const int size) {
         case Reg::R10: return "r10"; case Reg::R11: return "r11";
         case Reg::R12: return "r12"; case Reg::R13: return "r13";
         case Reg::R14: return "r14"; case Reg::R15: return "r15";
-        }
+    }
 
     assert(false && "internal error in to_string register");
     return "INTERNAL ERROR IN CODE EMISSION OF OPERAND";
